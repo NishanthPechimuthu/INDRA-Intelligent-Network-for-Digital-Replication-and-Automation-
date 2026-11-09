@@ -115,7 +115,7 @@ const WORKSTATION_LIVE = [
     calculated: true,
     value: ({ metrics, batch }) => metrics?.avgCycleTime ?? batch?.avgCycleTime,
     precision: 1,
-    tooltip: 'Average time a delivered piece spent in processing.',
+    tooltip: 'Line-wide average time a delivered piece spent in processing.',
   },
   {
     id: 'queueLength',
@@ -324,6 +324,17 @@ const BUFFER_LIVE = [
     liveKey: 'overflowCount',
     precision: 0,
     tooltip: 'Times an incoming piece could not enter because the buffer was full.',
+  },
+  {
+    id: 'blockedEvents',
+    label: 'Blocked events',
+    unit: 'occurrences',
+    calculated: true,
+    future: true,
+    value: () => null,
+    precision: 0,
+    tooltip:
+      'Future enhancement. The engine records blocked duration but does not retain a per-buffer blocked-event count.',
   },
   {
     id: 'blockedMinutes',
@@ -834,6 +845,82 @@ const WORKSTATION_SECTIONS = [
   { title: 'Live Metrics', fields: WORKSTATION_LIVE },
 ];
 
+const INSPECTION_LIVE = [
+  {
+    id: 'inspected',
+    label: 'Inspected products',
+    unit: pcs,
+    calculated: true,
+    liveKey: 'processed',
+    precision: 0,
+    tooltip: 'Pieces that completed inspection at this station.',
+  },
+  {
+    id: 'accepted',
+    label: 'Accepted products',
+    unit: pcs,
+    calculated: true,
+    liveKey: 'good',
+    precision: 0,
+    tooltip: 'Inspected pieces accepted as good output.',
+  },
+  {
+    id: 'rejected',
+    label: 'Rejected products',
+    unit: pcs,
+    calculated: true,
+    liveKey: 'rejected',
+    precision: 0,
+    tooltip: 'Inspected pieces rejected by the quality rule.',
+  },
+  {
+    id: 'defectRate',
+    label: 'Defect rate',
+    unit: '%',
+    calculated: true,
+    liveKey: 'defectRate',
+    precision: 1,
+    tooltip: 'Configured incoming defect rate used by the inspection model.',
+  },
+  {
+    id: 'throughput',
+    label: 'Inspection throughput',
+    unit: pcsPerHour,
+    calculated: true,
+    liveKey: 'throughput',
+    precision: 1,
+    tooltip: 'Pieces inspected per simulated hour.',
+  },
+  {
+    id: 'avgInspectionTime',
+    label: 'Average inspection time',
+    unit: secondsPerPiece,
+    calculated: true,
+    value: ({ metrics, batch }) => metrics?.avgCycleTime ?? batch?.avgCycleTime,
+    precision: 1,
+    tooltip: 'Line-wide average time a delivered piece spent in processing and inspection.',
+  },
+  {
+    id: 'utilization',
+    label: 'Inspection utilization',
+    unit: '%',
+    calculated: true,
+    liveKey: 'utilization',
+    precision: 1,
+    tooltip: 'Share of scheduled time spent inspecting pieces.',
+  },
+  {
+    id: 'energyKwh',
+    label: 'Energy consumption',
+    unit: 'kWh',
+    calculated: true,
+    liveKey: 'energyKwh',
+    precision: 3,
+    tooltip: 'Electrical energy consumed by the inspection equipment.',
+  },
+  stateField('Current inspection state reported by the live engine.'),
+];
+
 const INSPECTION_SECTIONS = [
   {
     title: 'Operational Parameters',
@@ -1090,7 +1177,7 @@ const INSPECTION_SECTIONS = [
       },
     ],
   },
-  { title: 'Live Metrics', fields: WORKSTATION_LIVE },
+  { title: 'Live Metrics', fields: INSPECTION_LIVE },
 ];
 
 const SOURCE_SECTIONS = [
