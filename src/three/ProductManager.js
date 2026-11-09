@@ -5,12 +5,12 @@
 import * as THREE from 'three';
 
 const COLORS = {
-  moving: 0x5ec8e8,
-  queued: 0x9fb7c9,
-  processing: 0xf0b45a,
-  done: 0x4fda9e,
-  rejected: 0xe25555,
-  blocked: 0xe09a4f,
+  moving: 0xbfc7d1,
+  queued: 0x7e868f,
+  processing: 0xd9b45b,
+  done: 0xcdf22b,
+  rejected: 0xff8f8f,
+  blocked: 0xd19a4f,
 };
 
 function stateColor(product) {

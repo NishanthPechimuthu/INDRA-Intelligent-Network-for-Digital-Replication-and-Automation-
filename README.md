@@ -1,6 +1,6 @@
 # INDRA · Industrial Digital Twin Studio
 
-**Version 0.0.2** · Intelligent Network for Digital Replication and Automation
+**Version 0.0.3** · Intelligent Network for Digital Replication and Automation
 
 INDRA is a browser-based 3D factory design and discrete-event simulation studio. Lay out a
 production line on the grid, connect real material routes, assign workers and watch products move
@@ -31,8 +31,13 @@ and change-management workflow are preserved.
   assumptions, downtime, average cycle and wait time, WIP, bottleneck, power, worker utilisation,
   per-line and per-station metrics, hourly good/rejected chart, diagnostics and a reset action.
   Actual, calculated and assumed values are labelled separately.
-- **Operational properties** – every station type exposes editable cycle, capacity, reliability,
-  worker, inspection and energy fields, plus read-only live state in the properties panel.
+- **Industrial properties** – component-specific forms are grouped into collapsible sections for
+  information, transform, operational, production, resource, energy, reliability/maintenance and
+  live metrics. Numeric fields show SI or practical units, changed values are highlighted and can be
+  reset, and calculated metrics are read-only. Unsupported telemetry is labelled as a future
+  enhancement instead of being fabricated.
+- **Engineering design system** – Midnight Black surfaces, Soft Ivory text and Neon Lime accents,
+  with Inter for interface copy and JetBrains Mono for values, units and identifiers.
 - **Branding** – INDRA logo, favicon, title and metadata come from `assets/logos/` and
   `assets/favicons/`. Header and footer show the product name and version.
 
@@ -193,18 +198,19 @@ window.__INDRA__.getProducts();    // product token positions
 ## Tests
 
 ```bash
-npm test             # 46 unit tests: live engine, workers, assets, graph, parity, reducer
-npm run test:e2e     # 18 Playwright tests using system Chrome + SwiftShader
+npm test             # 52 unit tests: live engine, workers, assets, graph, parity, reducer, schema
+npm run test:e2e     # 19 Playwright tests using system Chrome + SwiftShader
 ```
 
 Playwright starts its own Vite server on port 5183 and reuses an existing one if present. The unit
 suite covers graph routing, queue/buffer capacity and blocking, inspection rejection, scheduled
 downtime, starvation, branching, deterministic step/previous, mass balance, worker layout and asset
-provenance. The browser suite covers WASM loading, GLB assets, zoom/orbit/pan, top/3D switching,
-library placement, body/gizmo transforms, duplicate/delete/undo, property editing and stale results,
-port-to-port connections, saved-layout reloads, graph-driven batch simulation, 4M approval gating,
-step/previous, continuous pause/resume/stop/reset, speed changes, product motion, worker
-counts/statuses and the live results dashboard. Docker Compose configuration is validated by
+provenance, industrial section grouping, SI unit labels and future-enhancement markers. The browser
+suite covers WASM loading, GLB assets, zoom/orbit/pan, top/3D switching, library placement,
+body/gizmo transforms, duplicate/delete/undo, property editing and stale results, grouped property
+units and reset controls, port-to-port connections, saved-layout reloads, graph-driven batch
+simulation, 4M approval gating, step/previous, continuous pause/resume/stop/reset, speed changes,
+product motion, worker counts/statuses and the live results dashboard. Docker Compose configuration is validated by
 `docker compose config`; build/run requires a Docker daemon the current user can access.
 
 ## Asset provenance

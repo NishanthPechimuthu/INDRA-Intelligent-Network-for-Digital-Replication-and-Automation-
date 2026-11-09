@@ -54,7 +54,7 @@ import {
   saveVersion,
 } from './persistence/storage.js';
 
-const LINE_COLORS = ['#42bda2', '#5b9bd5', '#e3a13d', '#c084fc', '#e07a7a', '#8ed36b'];
+const LINE_COLORS = ['#9db83a', '#8fa3b8', '#d9b45b', '#93a89d', '#b3a88f', '#a69fb6'];
 
 function formatClock(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -737,7 +737,7 @@ export default function App() {
           </span>
         </div>
         <div className="project">
-          ● {factory.name} <i>v0.0.2</i>
+          ● {factory.name} <i>v0.0.3</i>
           <button className="ghost" onClick={() => setDialogOpen(true)} data-testid="open-file-dialog">
             <FolderOpen size={14} /> File
           </button>
@@ -959,6 +959,7 @@ export default function App() {
               factory={factory}
               selection={selection}
               result={result}
+              liveSnapshot={liveSnapshot}
               onUpdateComponent={handleUpdateComponent}
               onUpdateProps={handleUpdateProps}
               onDelete={(ids) => dispatch({ type: 'deleteComponents', ids })}

@@ -1,6 +1,6 @@
 # Asset licenses and attribution
 
-INDRA 0.0.2 ships every runtime 3D model locally in `assets/glb/`. No model is
+INDRA 0.0.3 ships every runtime 3D model locally in `assets/glb/`. No model is
 downloaded from a third-party server while the application is running.
 
 ## Factory hardware — Kenney Factory Kit 3.0
