@@ -33,7 +33,7 @@ export class SceneManager {
     this.connectedPortsActive = false;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#0f1924');
+    this.scene.background = new THREE.Color('#08090b');
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -51,8 +51,8 @@ export class SceneManager {
     const height = Math.max(1, container.clientHeight);
     this.cameraController = new CameraController(this.renderer.domElement, width, height);
 
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x33424e, 1.7));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.1);
+    this.scene.add(new THREE.HemisphereLight(0xfaf8f3, 0x1b1e22, 1.55));
+    const keyLight = new THREE.DirectionalLight(0xfffdf6, 2.05);
     keyLight.position.set(12, 22, 10);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(2048, 2048);
@@ -66,13 +66,13 @@ export class SceneManager {
     keyLight.shadow.normalBias = 0.025;
     this.scene.add(keyLight);
     this.keyLight = keyLight;
-    const fillLight = new THREE.DirectionalLight(0x7fb4d8, 0.5);
+    const fillLight = new THREE.DirectionalLight(0xcfd4c4, 0.45);
     fillLight.position.set(-14, 8, -12);
     this.scene.add(fillLight);
 
     this.floor = new THREE.Mesh(
       new THREE.PlaneGeometry(1000, 1000),
-      new THREE.MeshStandardMaterial({ color: 0x0c1620, roughness: 0.95, metalness: 0.05 }),
+      new THREE.MeshStandardMaterial({ color: 0x0b0d10, roughness: 0.96, metalness: 0.04 }),
     );
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.position.y = -0.015;
@@ -167,7 +167,7 @@ export class SceneManager {
     const size = Math.max(10, grid?.size || 50);
     const spacing = Math.max(0.25, grid?.spacing || 1);
     const divisions = Math.max(1, Math.round(size / spacing));
-    this.grid = new THREE.GridHelper(size, divisions, 0x527083, 0x263846);
+    this.grid = new THREE.GridHelper(size, divisions, 0x4a541f, 0x22252a);
     this.grid.position.y = 0.002;
     this.grid.raycast = () => {};
     this.scene.add(this.grid);

@@ -8,9 +8,9 @@ import { assetLibrary } from './AssetLibrary.js';
 import { workerCount, workerLayout } from './workerLayout.js';
 
 const STATUS_COLORS = {
-  available: 0x42d6b2,
-  working: 0xf0b45a,
-  unavailable: 0xe25555,
+  available: 0xcdf22b,
+  working: 0xd9b45b,
+  unavailable: 0xff8f8f,
 };
 
 export class WorkerManager {
@@ -27,13 +27,13 @@ export class WorkerManager {
     this.headGeometry = new THREE.SphereGeometry(0.15, 14, 10);
     this.ringGeometry = new THREE.RingGeometry(0.29, 0.38, 28);
     this.fallbackBody = new THREE.MeshStandardMaterial({
-      color: 0x3f6f86,
-      roughness: 0.65,
-      metalness: 0.15,
+      color: 0x3a4048,
+      roughness: 0.68,
+      metalness: 0.12,
     });
     this.fallbackHead = new THREE.MeshStandardMaterial({
-      color: 0xe0a94f,
-      roughness: 0.55,
+      color: 0xb9a98f,
+      roughness: 0.6,
       metalness: 0.05,
     });
   }

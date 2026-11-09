@@ -34,7 +34,7 @@ function baseMaterial(color, options = {}) {
 }
 
 function darkMaterial() {
-  return baseMaterial(0x263747, { roughness: 0.7, metalness: 0.4 });
+  return baseMaterial(0x1c1f23, { roughness: 0.72, metalness: 0.38 });
 }
 
 function addMesh(group, geometry, material, x, y, z, materials) {
@@ -47,23 +47,23 @@ function addMesh(group, geometry, material, x, y, z, materials) {
 
 function makeLabelTexture(name, color) {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 112;
+  canvas.width = 384;
+  canvas.height = 84;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'rgba(10, 21, 32, 0.92)';
-  roundRect(ctx, 4, 4, 504, 104, 16);
+  ctx.fillStyle = 'rgba(8, 9, 11, 0.9)';
+  roundRect(ctx, 3, 3, 378, 78, 10);
   ctx.fill();
-  ctx.strokeStyle = `${color}aa`;
-  ctx.lineWidth = 3;
-  roundRect(ctx, 4, 4, 504, 104, 16);
+  ctx.strokeStyle = `${color}99`;
+  ctx.lineWidth = 2;
+  roundRect(ctx, 3, 3, 378, 78, 10);
   ctx.stroke();
-  ctx.fillStyle = '#e6f0f7';
-  ctx.font = 'bold 42px Inter, Arial';
+  ctx.fillStyle = '#faf8f3';
+  ctx.font = '600 30px Inter, Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const text = String(name || 'Component');
-  ctx.fillText(text.length > 30 ? `${text.slice(0, 29)}…` : text, 256, 58);
+  ctx.fillText(text.length > 28 ? `${text.slice(0, 27)}…` : text, 192, 43);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -85,7 +85,7 @@ function makeLabel(name, color, y) {
   const texture = makeLabelTexture(name, color);
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(2.8, 0.61, 1);
+  sprite.scale.set(2.05, 0.45, 1);
   sprite.position.set(0, y, 0);
   sprite.renderOrder = 20;
   // Labels are billboards with a wide screen footprint. If they take part in
@@ -106,9 +106,9 @@ function updateLabel(label, name, color) {
   labelTextures.delete(old);
 }
 
-const SELECT_COLOR = new THREE.Color(0x42d6b2);
-const CONNECTED_COLOR = new THREE.Color(0x4f9de8);
-const HOVER_COLOR = new THREE.Color(0x71d4bd);
+const SELECT_COLOR = new THREE.Color(0xcdf22b);
+const CONNECTED_COLOR = new THREE.Color(0x8fa3b5);
+const HOVER_COLOR = new THREE.Color(0xe6ff86);
 
 function ringFor(type) {
   if (type === 'conveyor') return geo('ring-conveyor', () => new THREE.RingGeometry(1.3, 1.45, 40));
@@ -214,7 +214,7 @@ export function createVisual(component) {
     addMesh(group, geo('ws-body', () => new THREE.BoxGeometry(1.35, 1.3, 1.2)), main, 0, 0.65, 0, materials);
     const accent = darkMaterial();
     addMesh(group, geo('ws-top', () => new THREE.BoxGeometry(0.78, 0.16, 0.7)), accent, 0, 1.4, 0, materials);
-    const screen = new THREE.MeshStandardMaterial({ color: 0x8fe6d0, emissive: 0x2fae93, emissiveIntensity: 0.8, roughness: 0.3 });
+    const screen = new THREE.MeshStandardMaterial({ color: 0xd8ef7a, emissive: 0x6f8412, emissiveIntensity: 0.7, roughness: 0.3 });
     addMesh(group, geo('ws-screen', () => new THREE.BoxGeometry(0.46, 0.28, 0.04)), screen, 0, 0.95, 0.62, materials);
     labelY = 2.1;
   } else if (component.type === 'worker') {
@@ -392,21 +392,21 @@ function drawPanel(panel, metric, result, name) {
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
-  ctx.fillStyle = '#0b1621';
+  ctx.fillStyle = '#08090b';
   ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = '#2d4a5d';
+  ctx.strokeStyle = '#2a2e34';
   ctx.lineWidth = 4;
   ctx.strokeRect(8, 8, width - 16, height - 16);
-  ctx.fillStyle = '#6f8ba0';
-  ctx.font = 'bold 24px DM Mono, monospace';
+  ctx.fillStyle = '#8b8f86';
+  ctx.font = '500 22px "JetBrains Mono", monospace';
   ctx.textAlign = 'left';
-  ctx.fillText(String(name || 'DISPLAY').toUpperCase().slice(0, 26), 24, 42);
-  ctx.fillStyle = '#42d6b2';
-  ctx.font = 'bold 22px DM Mono, monospace';
+  ctx.fillText(String(name || 'DISPLAY').slice(0, 26), 24, 42);
+  ctx.fillStyle = '#cdf22b';
+  ctx.font = '600 20px "JetBrains Mono", monospace';
   ctx.fillText((METRIC_LABELS[metric] || metric || '').toUpperCase(), 24, 78);
 
   let value = '—';
-  let sub = result ? `${result.hours}h run` : 'Run simulation';
+  let sub = result ? `${result.hours} h run` : 'Run simulation';
   if (result) {
     if (metric === 'throughput') value = `${result.throughputPerHour}/hr`;
     else if (metric === 'good') value = result.good.toLocaleString();
@@ -419,10 +419,10 @@ function drawPanel(panel, metric, result, name) {
       sub = 'bottleneck station';
     }
   }
-  ctx.fillStyle = '#f1f7fb';
-  ctx.font = `bold ${String(value).length > 10 ? 52 : 68}px DM Mono, monospace`;
+  ctx.fillStyle = '#faf8f3';
+  ctx.font = `600 ${String(value).length > 10 ? 52 : 68}px "JetBrains Mono", monospace`;
   ctx.fillText(String(value), 24, 178);
-  ctx.fillStyle = '#7f9ab0';
+  ctx.fillStyle = '#8b8f86';
   ctx.font = '20px Inter, Arial';
   ctx.fillText(sub, 24, 216);
 
@@ -432,7 +432,7 @@ function drawPanel(panel, metric, result, name) {
     const barWidth = (width - 60) / bars.length;
     bars.forEach((bar, i) => {
       const barHeight = (bar.good / max) * 54;
-      ctx.fillStyle = '#2eb79b';
+      ctx.fillStyle = '#a9c722';
       ctx.fillRect(24 + i * barWidth, 294 - barHeight, Math.max(2, barWidth - 6), barHeight);
     });
   }
@@ -465,7 +465,7 @@ export function createGhost(type) {
   group.userData.ghostMaterial = material;
   group.userData.ghostMesh = mesh;
 
-  const cellMaterial = new THREE.LineBasicMaterial({ color: 0x42d6b2, transparent: true, opacity: 0.9 });
+  const cellMaterial = new THREE.LineBasicMaterial({ color: 0xcdf22b, transparent: true, opacity: 0.9 });
   const cell = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-0.5, 0, -0.5),

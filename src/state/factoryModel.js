@@ -58,7 +58,7 @@ export function createEmptyFactory(name = 'New Factory') {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     grid: { size: 50, spacing: 1, snap: true },
-    lines: [createLine('Line 01', '#42bda2', 'L1')],
+    lines: [createLine('Line 01', '#9db83a', 'L1')],
     components: [],
     connections: [],
     settings: { durationHours: 8, warmupMinutes: 0, seed: 12345, stochastic: true },
@@ -185,7 +185,7 @@ export function normaliseFactory(raw, options = {}) {
     ? source.lines.map((l, i) => ({
         id: String(l.id || `L${i + 1}`),
         name: String(l.name || `Line ${i + 1}`),
-        color: l.color || '#42bda2',
+        color: l.color || '#9db83a',
       }))
     : preset.lines;
 

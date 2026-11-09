@@ -2,9 +2,9 @@
 
 import * as THREE from 'three';
 
-const MATERIAL_COLOR = 0x52c9ad;
-const WORKER_COLOR = 0xe3a13d;
-const INVALID_COLOR = 0xe25555;
+const MATERIAL_COLOR = 0x9aa393;
+const WORKER_COLOR = 0xd9b45b;
+const INVALID_COLOR = 0xff8f8f;
 
 function makeCurve(start, end) {
   const distance = start.distanceTo(end);

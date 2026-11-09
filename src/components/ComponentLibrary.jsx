@@ -29,7 +29,7 @@ const ICONS = {
   display: Monitor,
 };
 
-const LINE_COLORS = ['#42bda2', '#5b9bd5', '#e3a13d', '#c084fc', '#e07a7a', '#8ed36b'];
+const LINE_COLORS = ['#9db83a', '#8fa3b8', '#d9b45b', '#93a89d', '#b3a88f', '#a69fb6'];
 
 export default function ComponentLibrary({
   factory,

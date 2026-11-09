@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: indra-industrial-digital-twin:0.0.2
+    image: indra-industrial-digital-twin:0.0.3
     container_name: indra-industrial-digital-twin
     ports:
       - "${INDRA_PORT:-8080}:8080"

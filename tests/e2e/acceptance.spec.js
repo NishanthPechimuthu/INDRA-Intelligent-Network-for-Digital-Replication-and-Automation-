@@ -205,6 +205,42 @@ test('editing workstation properties updates the model and marks results stale',
   await expect(page.getByText('STALE', { exact: true })).toBeVisible();
 });
 
+test('properties panel groups industrial sections with units and reset controls', async ({ page }) => {
+  await boot(page);
+  await selectObject(page, 'N3');
+
+  for (const title of [
+    'Operational Parameters',
+    'Production Parameters',
+    'Resource Parameters',
+    'Energy Parameters',
+    'Reliability and Maintenance',
+    'Live Metrics',
+  ]) {
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  }
+
+  const cycle = page.getByTestId('prop-cycleTime');
+  await expect(cycle).toHaveValue('20');
+  await expect(cycle.locator('xpath=..').locator('.unit-pill')).toHaveText('s/pc');
+  await expect(
+    page.getByTestId('prop-powerKw').locator('xpath=..').locator('.unit-pill'),
+  ).toHaveText('kW');
+
+  const cycleField = cycle.locator('xpath=../..');
+  await cycle.fill('35');
+  await cycle.blur();
+  await expect(cycleField).toHaveClass(/modified/);
+  await cycleField
+    .getByRole('button', { name: 'Reset Cycle time per piece to default' })
+    .click();
+  await expect(cycle).toHaveValue('20');
+
+  await expect(page.getByText('Calculated', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Tool condition').first()).toBeVisible();
+  await expect(page.getByText('Future enhancement').first()).toBeVisible();
+});
+
 test('connects Source to Conveyor to Workstation to Output by dragging ports', async ({ page }) => {
   await boot(page);
 
