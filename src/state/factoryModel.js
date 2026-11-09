@@ -92,6 +92,8 @@ export function createSeedFactory() {
     { id: 'C8', from: 'N8', to: 'N3', kind: 'worker' },
     { id: 'C9', from: 'N8', to: 'N5', kind: 'worker' },
   );
+  const inspection = factory.components.find((component) => component.id === 'N5');
+  if (inspection) inspection.props.stationType = 'inspection';
   return factory;
 }
 

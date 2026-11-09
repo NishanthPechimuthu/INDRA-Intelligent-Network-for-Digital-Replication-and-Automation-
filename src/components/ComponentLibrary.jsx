@@ -10,15 +10,17 @@ import {
   Monitor,
   Package,
   Plus,
+  ScanLine,
   Trash2,
   Users,
   Wrench,
 } from 'lucide-react';
-import { COMPONENT_TYPES, typeColor } from '../data/componentDefs.js';
+import { LIBRARY_ITEMS, typeColor } from '../data/componentDefs.js';
 
 const ICONS = {
   source: Package,
   workstation: Wrench,
+  inspection: ScanLine,
   worker: Users,
   conveyor: Cable,
   buffer: Layers,
@@ -52,28 +54,30 @@ export default function ComponentLibrary({
   const lineById = new Map(factory.lines.map((line) => [line.id, line]));
   const selected = new Set(selection);
 
-  const handleDragStart = (event, type) => {
-    event.dataTransfer.setData('application/x-its-component', type);
+  const handleDragStart = (event, definition) => {
+    const dragType = definition.dragType || definition.type;
+    event.dataTransfer.setData('application/x-indra-component', dragType);
+    event.dataTransfer.setData('application/x-its-component', dragType);
     event.dataTransfer.effectAllowed = 'copy';
-    onDragStart?.(type);
+    onDragStart?.(dragType);
   };
 
   return (
     <aside className="left">
       <h4>COMPONENTS</h4>
       <p className="library-hint">Drag onto the grid, or click to place repeatedly.</p>
-      {COMPONENT_TYPES.map((definition) => {
+      {LIBRARY_ITEMS.map((definition) => {
         const Icon = ICONS[definition.type] || Package;
         return (
           <button
-            className={`tool ${activePlacement === definition.type ? 'placing' : ''}`}
-            onClick={() => onActivatePlacement(definition.type)}
-            key={definition.type}
+            className={`tool ${activePlacement === definition.dragType ? 'placing' : ''}`}
+            onClick={() => onActivatePlacement(definition.dragType)}
+            key={definition.dragType}
             draggable
-            onDragStart={(event) => handleDragStart(event, definition.type)}
+            onDragStart={(event) => handleDragStart(event, definition)}
             onDragEnd={() => onDragEnd?.()}
             title={`Drag ${definition.label} onto the grid`}
-            data-testid={`tool-${definition.type}`}
+            data-testid={`tool-${definition.dragType}`}
           >
             <span className="tool-grip"><GripVertical size={11} /></span>
             <Icon size={16} />

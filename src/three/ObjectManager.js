@@ -9,6 +9,7 @@ import {
   updateAnalyticPanel,
   updateVisualLabel,
 } from './ObjectFactory.js';
+import { bindVisualModel } from './ModelBinder.js';
 
 export class ObjectManager {
   constructor(scene) {
@@ -53,6 +54,7 @@ export class ObjectManager {
 
       updateVisualLabel(visual, component);
       setPortsForSelection(visual, this.selection.has(component.id));
+      bindVisualModel(visual, component);
 
       if (visual.panel) {
         updateAnalyticPanel(visual, component.props.metric || 'throughput', this.result);

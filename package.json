@@ -1,6 +1,6 @@
 {
-  "name": "industrial-twin-studio",
-  "version": "0.1.0",
+  "name": "indra-industrial-digital-twin-studio",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,5 +22,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0"
-  }
+  },
+  "description": "INDRA \u2013 Industrial Digital Twin Studio: browser-based 3D factory design and live discrete-event production simulation."
 }

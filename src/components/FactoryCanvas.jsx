@@ -11,6 +11,7 @@ const FactoryCanvas = forwardRef(function FactoryCanvas(
     transformMode,
     view,
     result,
+    simulation,
     dragType,
     onSelect,
     onToggleSelect,
@@ -76,8 +77,9 @@ const FactoryCanvas = forwardRef(function FactoryCanvas(
       connectMode,
       transformMode,
       result,
+      simulation,
     });
-  }, [factory, selection, mode, placementType, connectMode, transformMode, result]);
+  }, [factory, selection, mode, placementType, connectMode, transformMode, result, simulation]);
 
   useEffect(() => {
     managerRef.current?.setView(view);
@@ -97,6 +99,8 @@ const FactoryCanvas = forwardRef(function FactoryCanvas(
     portScreenPoint: (id, kind) => managerRef.current?.portScreenPoint(id, kind) || null,
     worldScreenPoint: (x, y, z) => managerRef.current?.worldScreenPoint(x, y, z) || null,
     cameraDebug: () => managerRef.current?.cameraDebug() || null,
+    workerDebug: () => managerRef.current?.workerDebug() || null,
+    productDebug: () => managerRef.current?.productDebug() || null,
   }), []);
 
   const handleDragOver = (event) => {
@@ -114,7 +118,9 @@ const FactoryCanvas = forwardRef(function FactoryCanvas(
   const handleDrop = (event) => {
     event.preventDefault();
     const type =
-      event.dataTransfer.getData('application/x-its-component') || dragType;
+      event.dataTransfer.getData('application/x-indra-component') ||
+      event.dataTransfer.getData('application/x-its-component') ||
+      dragType;
     if (!type) return;
     const point = managerRef.current?.dropPlacement(type, event.clientX, event.clientY);
     managerRef.current?.clearPlacementPreview();

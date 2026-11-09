@@ -2,15 +2,20 @@ import React, { useCallback, useEffect, useReducer, useRef, useState } from 'rea
 import {
   Activity,
   Box,
-  Factory,
   FolderOpen,
   Grid3X3,
+  Pause,
   Play,
+  RotateCcw,
   Save,
   ShieldCheck,
+  SkipBack,
+  SkipForward,
   SlidersHorizontal,
+  Square,
   BarChart3,
 } from 'lucide-react';
+import logoUrl from '../assets/logos/logo-64.png';
 import ComponentLibrary from './components/ComponentLibrary.jsx';
 import FactoryCanvas from './components/FactoryCanvas.jsx';
 import CanvasToolbar from './components/CanvasToolbar.jsx';
@@ -28,6 +33,7 @@ import {
   makeId,
 } from './state/factoryModel.js';
 import { runSimulation, initSimulationEngine, getEngineName } from './engine/index.js';
+import { ProductionEngine } from './engine/live/ProductionEngine.js';
 import { validateConnection } from './engine/graph.js';
 import { typeLabel } from './data/componentDefs.js';
 import {
@@ -49,6 +55,14 @@ import {
 } from './persistence/storage.js';
 
 const LINE_COLORS = ['#42bda2', '#5b9bd5', '#e3a13d', '#c084fc', '#e07a7a', '#8ed36b'];
+
+function formatClock(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 function makeInitialBaseline() {
   const stored = loadBaseline();
@@ -88,6 +102,9 @@ export default function App() {
     }),
   );
   const [resultStale, setResultStale] = useState(false);
+  const [liveSnapshot, setLiveSnapshot] = useState(null);
+  const [liveStatus, setLiveStatus] = useState('idle');
+  const [liveSpeed, setLiveSpeed] = useState(1);
   const [baselineRecord, setBaselineRecord] = useState(makeInitialBaseline);
   const [role, setRole] = useState('Engineer');
   const [versions, setVersions] = useState(() => loadVersions());
@@ -101,6 +118,10 @@ export default function App() {
   const toastTimer = useRef(null);
   const factoryRef = useRef(factory);
   const previousFactory = useRef(factory);
+  const liveEngineRef = useRef(null);
+  const liveStatusRef = useRef('idle');
+  const liveSpeedRef = useRef(1);
+  const liveSnapshotRef = useRef(null);
 
   useEffect(() => {
     window.__ITS__ = {
@@ -108,9 +129,13 @@ export default function App() {
       portPoint: (id, kind) => canvasRef.current?.portScreenPoint(id, kind) || null,
       worldPoint: (x, y, z) => canvasRef.current?.worldScreenPoint(x, y, z) || null,
       camera: () => canvasRef.current?.cameraDebug() || null,
+      workerDebug: () => canvasRef.current?.workerDebug() || null,
+      productDebug: () => canvasRef.current?.productDebug() || null,
       fitAll: () => canvasRef.current?.fitAll(),
       getFactory: () => factoryRef.current,
       getResult: () => result,
+      getLive: () => liveSnapshotRef.current,
+      getLiveStatus: () => liveStatusRef.current,
       getView: () => view,
       getSelection: () => selection,
     };
@@ -169,6 +194,11 @@ export default function App() {
     if (previousFactory.current !== factory) {
       previousFactory.current = factory;
       setResultStale(true);
+      liveEngineRef.current = null;
+      liveSnapshotRef.current = null;
+      liveStatusRef.current = 'idle';
+      setLiveSnapshot(null);
+      setLiveStatus('idle');
       const timer = setTimeout(() => saveDraft(factory), 650);
       return () => clearTimeout(timer);
     }
@@ -222,7 +252,14 @@ export default function App() {
       currentFactory.lines.some((line) => line.id === activeLineId)
         ? activeLineId
         : currentFactory.lines[0]?.id || null;
-    const component = createComponent(type, { name, x, y, z, lineId });
+    const component = createComponent(type === 'inspection' ? 'workstation' : type, {
+      name,
+      x,
+      y,
+      z,
+      lineId,
+      props: type === 'inspection' ? { stationType: 'inspection' } : undefined,
+    });
     dispatch({ type: 'addComponent', component });
     notify(`Placed ${name} at X ${x}, Z ${z}.`);
   }, [activeLineId, notify]);
@@ -291,6 +328,160 @@ export default function App() {
       notify(next.notes[0] || 'Simulation could not run.');
     }
   }, [notify]);
+
+  const publishLive = useCallback((snapshot) => {
+    liveSnapshotRef.current = snapshot;
+    setLiveSnapshot(snapshot);
+  }, []);
+
+  const createLiveEngine = useCallback(() => {
+    const current = factoryRef.current;
+    const engine = new ProductionEngine(current, {
+      durationSeconds: Math.max(1, Number(current.settings.durationHours) || 8) * 3600,
+      seed: current.settings.seed,
+      stochastic: current.settings.stochastic,
+    });
+    liveEngineRef.current = engine;
+    return engine;
+  }, []);
+
+  const startLive = useCallback(() => {
+    if (liveStatusRef.current === 'running') return;
+    let engine = liveEngineRef.current;
+    if (!engine || liveStatusRef.current === 'finished') {
+      engine = createLiveEngine();
+      publishLive(engine.snapshot());
+    }
+    liveStatusRef.current = 'running';
+    setLiveStatus('running');
+    setTab('results');
+    notify(`Continuous run started · ${liveSpeedRef.current}× · operation ${engine.operationSeq}.`);
+  }, [createLiveEngine, notify, publishLive]);
+
+  const pauseLive = useCallback(() => {
+    if (liveStatusRef.current !== 'running') return;
+    liveStatusRef.current = 'paused';
+    setLiveStatus('paused');
+    notify('Continuous run paused.');
+  }, [notify]);
+
+  const resumeLive = useCallback(() => {
+    if (!liveEngineRef.current) {
+      startLive();
+      return;
+    }
+    liveStatusRef.current = 'running';
+    setLiveStatus('running');
+    notify('Continuous run resumed.');
+  }, [notify, startLive]);
+
+  const stopLive = useCallback(() => {
+    liveStatusRef.current = 'idle';
+    setLiveStatus('idle');
+    liveEngineRef.current = null;
+    notify('Live run stopped. Results remain visible until reset.');
+  }, [notify]);
+
+  const resetLive = useCallback(() => {
+    liveStatusRef.current = 'idle';
+    setLiveStatus('idle');
+    liveEngineRef.current = null;
+    publishLive(null);
+    notify('Live simulation reset.');
+  }, [notify, publishLive]);
+
+  const stepLive = useCallback(() => {
+    if (liveStatusRef.current === 'running') {
+      liveStatusRef.current = 'paused';
+      setLiveStatus('paused');
+    }
+    let engine = liveEngineRef.current;
+    if (!engine) engine = createLiveEngine();
+    if (engine.finished) {
+      notify('The live run has finished; reset to step again.');
+      return;
+    }
+    const snapshot = engine.step();
+    publishLive(snapshot);
+    if (snapshot.finished) {
+      liveStatusRef.current = 'finished';
+      setLiveStatus('finished');
+      notify(`Live run finished · ${snapshot.metrics.good} good · ${snapshot.metrics.rejected} rejected.`);
+      return;
+    }
+    liveStatusRef.current = 'paused';
+    setLiveStatus('paused');
+    const operation = snapshot.lastOperation?.type || 'none';
+    notify(`Step ${snapshot.operationSeq}: ${operation} at ${snapshot.elapsed.toFixed(1)}s.`);
+  }, [createLiveEngine, notify, publishLive]);
+
+  const previousStepLive = useCallback(() => {
+    const engine = liveEngineRef.current;
+    if (!engine) {
+      notify('No live run to step backwards through.');
+      return;
+    }
+    const snapshot = engine.previousStep();
+    publishLive(snapshot);
+    liveStatusRef.current = 'paused';
+    setLiveStatus('paused');
+    notify(`Returned to operation ${snapshot.operationSeq} at ${snapshot.elapsed.toFixed(1)}s.`);
+  }, [notify, publishLive]);
+
+  const setLiveSpeedValue = useCallback((speed) => {
+    liveSpeedRef.current = speed;
+    setLiveSpeed(speed);
+    notify(`Live speed ${speed}×.`);
+  }, [notify]);
+
+  useEffect(() => {
+    if (liveStatus !== 'running') return undefined;
+    let frame = 0;
+    let last = performance.now();
+    let lastPublish = 0;
+    const tick = (now) => {
+      const engine = liveEngineRef.current;
+      if (!engine) return;
+      const realDelta = Math.min(0.25, Math.max(0, (now - last) / 1000));
+      last = now;
+      // 1× maps to six simulated seconds per real second.
+      const snapshot = engine.advance(realDelta * 6 * liveSpeedRef.current);
+      if (now - lastPublish > 80) {
+        lastPublish = now;
+        publishLive(snapshot);
+      }
+      if (snapshot.finished) {
+        publishLive(snapshot);
+        liveStatusRef.current = 'finished';
+        setLiveStatus('finished');
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [liveStatus, publishLive]);
+
+  useEffect(() => {
+    window.__INDRA__ = {
+      getFactory: () => factoryRef.current,
+      getLive: () => liveSnapshotRef.current,
+      getLiveStatus: () => liveStatusRef.current,
+      getWorkers: () => canvasRef.current?.workerDebug() || null,
+      getProducts: () => canvasRef.current?.productDebug() || null,
+      start: startLive,
+      pause: pauseLive,
+      resume: resumeLive,
+      stop: stopLive,
+      reset: resetLive,
+      step: stepLive,
+      previous: previousStepLive,
+      setSpeed: setLiveSpeedValue,
+    };
+    return () => {
+      delete window.__INDRA__;
+    };
+  }, [pauseLive, previousStepLive, resetLive, resumeLive, setLiveSpeedValue, startLive, stepLive, stopLive]);
 
   const handleSaveVersion = useCallback((name) => {
     const named = { ...factoryRef.current, name };
@@ -514,25 +705,39 @@ export default function App() {
     notify('Production line removed. Its objects moved to the first line.');
   }, [notify]);
 
-  const metrics = result || {
+  const liveMetrics = liveSnapshot?.metrics || null;
+  const metrics = liveMetrics || result || {
     good: 0,
+    rejected: 0,
     throughputPerHour: 0,
     utilization: 0,
+    oee: null,
     bottleneck: '—',
   };
+  const liveOperation = liveSnapshot?.operationSeq ?? 0;
+  const liveElapsed = liveSnapshot?.elapsed ?? 0;
+  const liveClock = formatClock(liveElapsed);
+  const liveLabel =
+    liveStatus === 'running'
+      ? 'RUNNING'
+      : liveStatus === 'paused'
+        ? 'PAUSED'
+        : liveStatus === 'finished'
+          ? 'FINISHED'
+          : 'IDLE';
 
   return (
     <div className="app">
       <header>
         <div className="brand">
-          <Factory />
+          <img className="brand-logo" src={logoUrl} alt="INDRA" />
           <span>
-            <b>INDUSTRIAL TWIN STUDIO</b>
-            <small>DESIGN · SIMULATE · EVALUATE</small>
+            <b>INDRA</b>
+            <small>INDUSTRIAL DIGITAL TWIN STUDIO</small>
           </span>
         </div>
         <div className="project">
-          ● {factory.name} <i>v2.0</i>
+          ● {factory.name} <i>v0.0.2</i>
           <button className="ghost" onClick={() => setDialogOpen(true)} data-testid="open-file-dialog">
             <FolderOpen size={14} /> File
           </button>
@@ -609,6 +814,7 @@ export default function App() {
             transformMode={transformMode}
             view={view}
             result={result}
+            simulation={liveSnapshot}
             dragType={dragType}
             onSelect={selectObjects}
             onToggleSelect={toggleObject}
@@ -633,7 +839,51 @@ export default function App() {
           </FactoryCanvas>
 
           <div className="simbar">
-            <b><Activity size={15} /> Simulation controls</b>
+            <b><Activity size={15} /> Simulation</b>
+            <div className={`sim-state ${liveStatus}`} data-testid="live-state">
+              <span className="live-dot" />
+              <strong>{liveLabel}</strong>
+              <small>{liveClock} · op {liveOperation} · {liveSpeed}×</small>
+            </div>
+            <div className="sim-live">
+              {liveStatus === 'running' ? (
+                <button className="live-btn" onClick={pauseLive} data-testid="live-pause">
+                  <Pause size={13} /> Pause
+                </button>
+              ) : (
+                <button
+                  className="live-btn primary"
+                  onClick={liveStatus === 'paused' ? resumeLive : startLive}
+                  data-testid={liveStatus === 'paused' ? 'live-resume' : 'live-start'}
+                >
+                  <Play size={13} /> {liveStatus === 'paused' ? 'Resume' : 'Continuous run'}
+                </button>
+              )}
+              <button className="live-btn" onClick={stepLive} data-testid="live-step" title="Advance to the next production operation">
+                <SkipForward size={13} /> Step
+              </button>
+              <button className="live-btn" onClick={previousStepLive} data-testid="live-previous" title="Return to the previous operation">
+                <SkipBack size={13} /> Back
+              </button>
+              <button className="live-btn" onClick={stopLive} data-testid="live-stop" title="Stop the live run and keep the results">
+                <Square size={12} /> Stop
+              </button>
+              <button className="live-btn" onClick={resetLive} data-testid="live-reset" title="Reset live metrics and products">
+                <RotateCcw size={12} /> Reset
+              </button>
+              <div className="speed-group" role="group" aria-label="Live simulation speed">
+                {[1, 2, 4].map((speed) => (
+                  <button
+                    key={speed}
+                    className={liveSpeed === speed ? 'on' : ''}
+                    onClick={() => setLiveSpeedValue(speed)}
+                    data-testid={`live-speed-${speed}`}
+                  >
+                    {speed}×
+                  </button>
+                ))}
+              </div>
+            </div>
             <label>
               Duration
               <select
@@ -669,15 +919,17 @@ export default function App() {
             </label>
             <span className="graph-count">{factory.connections.length} graph links</span>
             <button className="run" onClick={runSimulationNow} data-testid="run-simulation">
-              <Play size={14} /> Run simulation
+              <Play size={14} /> Run batch simulation
             </button>
           </div>
 
           <div className="metrics">
             {[
-              ['GOOD OUTPUT', metrics.good.toLocaleString(), 'pcs', 'metric-good'],
+              ['GOOD OUTPUT', metrics.good, 'pcs', 'metric-good'],
+              ['REJECTED', metrics.rejected ?? 0, 'pcs', 'metric-rejected'],
               ['THROUGHPUT', metrics.throughputPerHour, '/hr', 'metric-throughput'],
               ['MACHINE UTILIZATION', metrics.utilization, '%', 'metric-utilization'],
+              ['OEE', metrics.oee ?? '—', '%', 'metric-oee'],
               ['BOTTLENECK', metrics.bottleneck, '', 'metric-bottleneck'],
             ].map(([label, value, unit, testId]) => (
               <div key={label} data-testid={testId}>
@@ -723,7 +975,18 @@ export default function App() {
             />
           )}
 
-          {tab === 'results' && <ResultsPanel result={result} stale={resultStale} hours={factory.settings.durationHours} />}
+          {tab === 'results' && (
+            <ResultsPanel
+              factory={factory}
+              result={result}
+              liveResult={liveMetrics}
+              liveStatus={liveStatus}
+              liveSnapshot={liveSnapshot}
+              onResetLive={resetLive}
+              stale={resultStale}
+              hours={factory.settings.durationHours}
+            />
+          )}
 
           {tab === 'change' && (
             <ChangePanel
@@ -744,7 +1007,8 @@ export default function App() {
         <span>● {status}</span>
         <span>
           {factory.components.length} objects · {factory.connections.length} connections ·{' '}
-          {view === '3d' ? 'Perspective' : 'Top orthographic'} · {engineName} · {selection.length} selected
+          {view === '3d' ? 'Perspective' : 'Top orthographic'} · {engineName} ·{' '}
+          live {liveLabel.toLowerCase()} · op {liveOperation} · {selection.length} selected
         </span>
       </footer>
 
