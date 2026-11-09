@@ -5,10 +5,14 @@ import * as THREE from 'three';
 import { CameraController } from './CameraController.js';
 import { ObjectManager } from './ObjectManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
+import { ProductManager } from './ProductManager.js';
+import { WorkerManager } from './WorkerManager.js';
 import { ObjectPlacement } from './ObjectPlacement.js';
 import { ObjectTransform } from './ObjectTransform.js';
 import { InteractionManager } from './InteractionManager.js';
 import { disposeSharedResources, setPortsActive } from './ObjectFactory.js';
+import { updateVisualMixers } from './ModelBinder.js';
+import { assetLibrary } from './AssetLibrary.js';
 import { validateConnection } from '../engine/graph.js';
 
 export class SceneManager {
@@ -24,6 +28,7 @@ export class SceneManager {
       connectMode: false,
       transformMode: 'translate',
       result: null,
+      simulation: null,
     };
     this.connectedPortsActive = false;
 
@@ -35,8 +40,12 @@ export class SceneManager {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.className = 'factory-canvas';
+    this.assetLibrary = assetLibrary;
+    this.clock = new THREE.Clock();
 
     const width = Math.max(1, container.clientWidth);
     const height = Math.max(1, container.clientHeight);
@@ -45,7 +54,18 @@ export class SceneManager {
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x33424e, 1.7));
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.1);
     keyLight.position.set(12, 22, 10);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 80;
+    keyLight.shadow.camera.left = -34;
+    keyLight.shadow.camera.right = 34;
+    keyLight.shadow.camera.top = 34;
+    keyLight.shadow.camera.bottom = -34;
+    keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.normalBias = 0.025;
     this.scene.add(keyLight);
+    this.keyLight = keyLight;
     const fillLight = new THREE.DirectionalLight(0x7fb4d8, 0.5);
     fillLight.position.set(-14, 8, -12);
     this.scene.add(fillLight);
@@ -56,6 +76,7 @@ export class SceneManager {
     );
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.position.y = -0.015;
+    this.floor.receiveShadow = true;
     this.floor.raycast = () => {};
     this.scene.add(this.floor);
 
@@ -63,6 +84,8 @@ export class SceneManager {
     this.rebuildGrid(initialFactory.grid);
 
     this.objectManager = new ObjectManager(this.scene);
+    this.productManager = new ProductManager(this.scene, this.objectManager);
+    this.workerManager = new WorkerManager(this.scene);
     this.connectionManager = new ConnectionManager(this.scene, this.objectManager, {
       getConnection: (id) => this.factory?.connections.find((c) => c.id === id) || null,
       validate: (from, to, kind) => validateConnection(this.factory, from, to, kind),
@@ -171,6 +194,8 @@ export class SceneManager {
 
     this.objectManager.sync(factory, this.state.selection, { result: this.state.result });
     this.connectionManager.sync(factory, this.state.connectMode);
+    this.productManager.sync(factory, this.state.simulation);
+    this.workerManager.sync(factory, this.state.simulation);
 
     this.transform.setCamera(this.cameraController.camera);
     this.transform.setMode(this.state.transformMode || 'translate');
@@ -279,6 +304,14 @@ export class SceneManager {
     };
   }
 
+  workerDebug() {
+    return this.workerManager?.debug() || null;
+  }
+
+  productDebug() {
+    return this.productManager?.debug() || null;
+  }
+
   cancelTransient() {
     this.interaction.cancelDrag();
     this.connectionManager.cancelPending();
@@ -302,7 +335,11 @@ export class SceneManager {
   }
 
   animate() {
+    const delta = Math.min(0.1, this.clock.getDelta());
     this.cameraController.update();
+    updateVisualMixers(this.objectManager?.visuals?.values() || [], delta);
+    this.productManager?.update(delta);
+    this.workerManager?.update(delta);
     this.renderer.render(this.scene, this.cameraController.camera);
   }
 
@@ -314,6 +351,8 @@ export class SceneManager {
     this.transform?.dispose();
     this.connectionManager?.dispose();
     this.placement?.dispose();
+    this.productManager?.dispose();
+    this.workerManager?.dispose();
     this.objectManager?.dispose();
     this.cameraController?.dispose();
     if (this.grid) {

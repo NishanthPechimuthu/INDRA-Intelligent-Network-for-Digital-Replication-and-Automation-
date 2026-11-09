@@ -7,6 +7,16 @@ import { ANALYTIC_TYPES, METRIC_LABELS, typeColor } from '../data/componentDefs.
 const geometryCache = new Map();
 const labelTextures = new Set();
 
+const PICK_FOOTPRINTS = {
+  source: [1.5, 1.25, 1.5],
+  workstation: [1.55, 1.5, 1.4],
+  worker: [1.3, 1.0, 1.3],
+  conveyor: [2.25, 0.65, 0.95],
+  buffer: [1.4, 0.95, 1.3],
+  output: [1.45, 0.95, 1.35],
+  display: [0.95, 1.7, 0.75],
+};
+
 function geo(key, create) {
   if (!geometryCache.has(key)) geometryCache.set(key, create());
   return geometryCache.get(key);
@@ -78,6 +88,10 @@ function makeLabel(name, color, y) {
   sprite.scale.set(2.8, 0.61, 1);
   sprite.position.set(0, y, 0);
   sprite.renderOrder = 20;
+  // Labels are billboards with a wide screen footprint. If they take part in
+  // raycasting they can sit in front of a neighbouring object and steal its
+  // pointer press, so labels are visual-only and never pick a component.
+  sprite.raycast = () => {};
   return { sprite, texture, material, name };
 }
 
@@ -247,6 +261,10 @@ export function createVisual(component) {
     labelY = 2.3;
   }
 
+  // Everything created before the label/selection ring/ports is the procedural
+  // fallback body. It is hidden when a GLB asset finishes loading.
+  const proceduralMeshes = group.children.slice();
+
   const label = makeLabel(component.name, color, labelY);
   group.add(label.sprite);
 
@@ -267,6 +285,32 @@ export function createVisual(component) {
 
   const ports = makePorts(group, component, materials);
 
+  const modelRoot = new THREE.Group();
+  modelRoot.name = `model-${component.id}`;
+  group.add(modelRoot);
+
+  // Invisible picking proxy with the component's footprint. Some GLB models are
+  // hollow or open (for example the inspection scanner), so a ray through the
+  // object centre could reach a component behind it. The proxy keeps body
+  // selection and dragging anchored to this node without drawing anything.
+  const proxySize = PICK_FOOTPRINTS[component.type] || [1.2, 1.2, 1.2];
+  const proxyMaterial = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    colorWrite: false,
+  });
+  materials.push(proxyMaterial);
+  const proxy = new THREE.Mesh(
+    geo(`pick-${component.type}`, () => new THREE.BoxGeometry(...proxySize)),
+    proxyMaterial,
+  );
+  proxy.position.y = proxySize[1] / 2 - 0.25;
+  proxy.castShadow = false;
+  proxy.receiveShadow = false;
+  proxy.name = `pick-${component.id}`;
+  group.add(proxy);
+
   const visual = {
     id: component.id,
     type: component.type,
@@ -277,6 +321,11 @@ export function createVisual(component) {
     ring,
     ports,
     panel: group.userData.panel || null,
+    proceduralMeshes,
+    modelRoot,
+    model: null,
+    assetKey: null,
+    assetError: null,
     baseColor: new THREE.Color(color),
     highlight: 'none',
   };
@@ -404,7 +453,7 @@ export function createGhost(type) {
   });
   let geometry;
   if (type === 'source') geometry = geo('source-body', () => new THREE.CylinderGeometry(0.66, 0.72, 0.95, 24));
-  else if (type === 'workstation') geometry = geo('ws-body', () => new THREE.BoxGeometry(1.35, 1.3, 1.2));
+  else if (type === 'workstation' || type === 'inspection') geometry = geo('ws-body', () => new THREE.BoxGeometry(1.35, 1.3, 1.2));
   else if (type === 'worker') geometry = geo('worker-body', () => new THREE.CylinderGeometry(0.66, 0.66, 0.48, 22));
   else if (type === 'conveyor') geometry = geo('conv-body', () => new THREE.BoxGeometry(2.2, 0.24, 0.85));
   else if (type === 'buffer') geometry = geo('buffer-body', () => new THREE.BoxGeometry(1.3, 0.82, 1.2));
@@ -445,6 +494,12 @@ export function setGhostCell(group, snapping, spacing) {
 
 export function disposeVisual(visual) {
   if (!visual) return;
+  visual.disposed = true;
+  visual.mixer?.stopAllAction();
+  if (visual.modelRoot) {
+    visual.modelRoot.clear();
+    visual.modelRoot.removeFromParent();
+  }
   visual.label?.texture?.dispose();
   labelTextures.delete(visual.label?.texture);
   visual.label?.material?.dispose();

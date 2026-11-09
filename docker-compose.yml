@@ -1,0 +1,18 @@
+services:
+  indra:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: indra-industrial-digital-twin:0.0.2
+    container_name: indra-industrial-digital-twin
+    ports:
+      - "${INDRA_PORT:-8080}:8080"
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

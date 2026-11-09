@@ -25,9 +25,15 @@ export const DEFAULT_PROPS = {
     inputPerHour: 180,
     productType: 'Widget A',
     initialQuantity: 0,
+    materialType: 'Steel billet',
+    maxStorageCapacity: 500,
+    replenishmentRate: 0,
   },
   workstation: {
+    stationType: 'production',
     cycleTime: 20,
+    processingCapacity: 1,
+    queueCapacity: 12,
     errorRate: 1,
     toolDamage: 2,
     powerKw: 2.5,
@@ -38,6 +44,11 @@ export const DEFAULT_PROPS = {
     meetingMinutes: 10,
     changeoverMinutes: 5,
     errorRecoveryMinutes: 5,
+    maintenanceMinutes: 0,
+    maintenanceInterval: 0,
+    inspectionAccuracy: 98,
+    defectDetectionRate: 95,
+    maxReinspection: 1,
   },
   worker: {
     employees: 4,
@@ -47,10 +58,13 @@ export const DEFAULT_PROPS = {
     meetingMinutes: 10,
     changeoverMinutes: 5,
     shiftMinutes: 480,
+    productivity: 92,
   },
   conveyor: {
     moveTime: 3,
     speed: 1.2,
+    length: 2.2,
+    direction: 'forward',
     faultRate: 1,
     faultRecoveryMinutes: 5,
     powerKw: 0.5,
@@ -64,21 +78,48 @@ export const DEFAULT_PROPS = {
   output: {
     binCapacity: 1000,
     productCount: 0,
+    acceptsRejected: false,
   },
   chart: { metric: 'throughput' },
   display: { metric: 'bottleneck' },
 };
 
+export const LIBRARY_ITEMS = [
+  ...COMPONENT_TYPES.map((definition) => ({ ...definition, dragType: definition.type })),
+  {
+    type: 'inspection',
+    dragType: 'inspection',
+    componentType: 'workstation',
+    label: 'Inspection station',
+    color: '#d4a24c',
+    physical: true,
+    graph: true,
+    preset: { stationType: 'inspection' },
+    ports: { in: true, out: true, workerIn: true, workerOut: false },
+  },
+];
+
+const PSEUDO_LABELS = { inspection: 'Inspection station' };
+
 export const PROPERTY_SCHEMAS = {
   source: [
     { key: 'inputPerHour', label: 'Product arrival rate', type: 'number', unit: 'pcs/hr', min: 0, step: 1 },
-    { key: 'productType', label: 'Product type', type: 'text' },
-    { key: 'initialQuantity', label: 'Initial product quantity', type: 'number', unit: 'pcs', min: 0, step: 1 },
+    { key: 'productType', label: 'Material / product type', type: 'text' },
+    { key: 'materialType', label: 'Material type', type: 'text' },
+    { key: 'initialQuantity', label: 'Initial inventory', type: 'number', unit: 'pcs', min: 0, step: 1 },
+    { key: 'maxStorageCapacity', label: 'Maximum storage capacity', type: 'number', unit: 'pcs', min: 1, step: 1 },
+    { key: 'replenishmentRate', label: 'Replenishment rate', type: 'number', unit: 'pcs/hr', min: 0, step: 1 },
+    { key: 'currentInventory', label: 'Current inventory', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'materialConsumption', label: 'Material consumption', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'shortageCount', label: 'Material shortages', type: 'number', unit: 'events', readOnly: true },
   ],
   workstation: [
+    { key: 'stationType', label: 'Station role', type: 'select', options: ['production', 'assembly', 'inspection'] },
     { key: 'cycleTime', label: 'Cycle time per piece', type: 'number', unit: 's', min: 1, step: 1 },
-    { key: 'errorRate', label: 'Error / rejection rate', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
-    { key: 'toolDamage', label: 'Tool damage', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
+    { key: 'processingCapacity', label: 'Processing capacity', type: 'number', unit: 'parallel pcs', min: 1, step: 1 },
+    { key: 'queueCapacity', label: 'Input queue capacity', type: 'number', unit: 'pcs', min: 1, step: 1 },
+    { key: 'errorRate', label: 'Error / defect rate', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
+    { key: 'toolDamage', label: 'Tool damage probability', type: 'number', unit: '%/pc', min: 0, max: 100, step: 0.1 },
     { key: 'powerKw', label: 'Power consumption', type: 'number', unit: 'kW', min: 0, step: 0.1 },
     { key: 'humanRequired', label: 'Human interaction required', type: 'boolean' },
     { key: 'workers', label: 'Assigned workers', type: 'number', unit: 'people', min: 0, step: 1 },
@@ -87,32 +128,65 @@ export const PROPERTY_SCHEMAS = {
     { key: 'meetingMinutes', label: 'Meeting duration', type: 'number', unit: 'min', min: 0, step: 1 },
     { key: 'changeoverMinutes', label: 'Tool / product / program changeover', type: 'number', unit: 'min', min: 0, step: 1 },
     { key: 'errorRecoveryMinutes', label: 'Error recovery time', type: 'number', unit: 'min', min: 0, step: 1 },
+    { key: 'maintenanceMinutes', label: 'Maintenance duration', type: 'number', unit: 'min', min: 0, step: 1 },
+    { key: 'maintenanceInterval', label: 'Maintenance interval', type: 'number', unit: 'pcs', min: 0, step: 1 },
+    { key: 'inspectionAccuracy', label: 'Inspection accuracy', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
+    { key: 'defectDetectionRate', label: 'Defect detection rate', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
+    { key: 'maxReinspection', label: 'Maximum reinspections', type: 'number', unit: 'passes', min: 0, step: 1 },
+    { key: 'currentState', label: 'Current machine state', type: 'text', readOnly: true },
+    { key: 'queueLength', label: 'Queue length', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'totalProcessed', label: 'Total processed pieces', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'acceptedQuantity', label: 'Accepted quantity', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'rejectedQuantity', label: 'Rejected quantity', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'reinspectionCount', label: 'Reinspection count', type: 'number', unit: 'pcs', readOnly: true },
   ],
   worker: [
-    { key: 'employees', label: 'Total employees', type: 'number', unit: 'people', min: 0, step: 1 },
+    { key: 'employees', label: 'Total assigned workers', type: 'number', unit: 'people', min: 0, step: 1 },
     { key: 'skill', label: 'Employee skill / assigned task', type: 'text' },
     { key: 'errorRate', label: 'Worker error rate', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
     { key: 'breakMinutes', label: 'Break time', type: 'number', unit: 'min', min: 0, step: 1 },
     { key: 'meetingMinutes', label: 'Meeting time', type: 'number', unit: 'min', min: 0, step: 1 },
     { key: 'changeoverMinutes', label: 'Changeover time', type: 'number', unit: 'min', min: 0, step: 1 },
     { key: 'shiftMinutes', label: 'Available working time per shift', type: 'number', unit: 'min', min: 1, step: 5 },
+    { key: 'productivity', label: 'Productivity assumption', type: 'number', unit: '%', min: 0, max: 100, step: 0.1 },
+    { key: 'availableWorkers', label: 'Available workers', type: 'number', unit: 'people', readOnly: true },
+    { key: 'busyWorkers', label: 'Busy workers', type: 'number', unit: 'people', readOnly: true },
+    { key: 'unavailableWorkers', label: 'Unavailable workers', type: 'number', unit: 'people', readOnly: true },
+    { key: 'assignedWorkstations', label: 'Assigned workstations', type: 'text', readOnly: true },
   ],
   conveyor: [
     { key: 'moveTime', label: 'Transport time per product', type: 'number', unit: 's', min: 0.1, step: 0.1 },
     { key: 'speed', label: 'Conveyor speed', type: 'number', unit: 'm/s', min: 0.01, step: 0.1 },
+    { key: 'length', label: 'Length', type: 'number', unit: 'm', min: 0.1, step: 0.1 },
+    { key: 'direction', label: 'Direction', type: 'select', options: ['forward', 'reverse'] },
     { key: 'faultRate', label: 'Fault probability', type: 'number', unit: '%/hr', min: 0, max: 100, step: 0.1 },
     { key: 'faultRecoveryMinutes', label: 'Fault recovery time', type: 'number', unit: 'min', min: 0, step: 1 },
     { key: 'powerKw', label: 'Power consumption', type: 'number', unit: 'kW', min: 0, step: 0.1 },
     { key: 'capacity', label: 'Maximum product capacity', type: 'number', unit: 'pcs', min: 1, step: 1 },
+    { key: 'currentProducts', label: 'Current number of products', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'utilization', label: 'Utilization', type: 'number', unit: '%', readOnly: true },
+    { key: 'blockedTime', label: 'Blocked time', type: 'number', unit: 's', readOnly: true },
+    { key: 'idleTime', label: 'Idle time', type: 'number', unit: 's', readOnly: true },
   ],
   buffer: [
     { key: 'capacity', label: 'Maximum storage capacity', type: 'number', unit: 'pcs', min: 1, step: 1 },
     { key: 'initialQuantity', label: 'Initial product quantity', type: 'number', unit: 'pcs', min: 0, step: 1 },
     { key: 'mode', label: 'Buffer configuration', type: 'select', options: ['FIFO', 'LIFO'] },
+    { key: 'currentInventory', label: 'Current inventory', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'availableCapacity', label: 'Available capacity', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'averageWaitingTime', label: 'Average waiting time', type: 'number', unit: 's', readOnly: true },
+    { key: 'overflowCount', label: 'Overflow count', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'inputRate', label: 'Input rate', type: 'number', unit: 'pcs/hr', readOnly: true },
+    { key: 'outputRate', label: 'Output rate', type: 'number', unit: 'pcs/hr', readOnly: true },
   ],
   output: [
     { key: 'binCapacity', label: 'Maximum capacity', type: 'number', unit: 'pcs', min: 1, step: 1 },
-    { key: 'productCount', label: 'Product count', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'productCount', label: 'Current quantity', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'acceptedProducts', label: 'Accepted products', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'rejectedProducts', label: 'Rejected products', type: 'number', unit: 'pcs', readOnly: true },
+    { key: 'storageUtilization', label: 'Storage utilization', type: 'number', unit: '%', readOnly: true },
+    { key: 'outputRate', label: 'Output rate', type: 'number', unit: 'pcs/hr', readOnly: true },
+    { key: 'acceptsRejected', label: 'Accepts rejected products', type: 'boolean' },
   ],
   chart: [
     { key: 'metric', label: 'Bound metric', type: 'select', options: ['throughput', 'good', 'rejected', 'utilization', 'wip', 'energy'] },
@@ -137,9 +211,18 @@ export function defaultProps(type) {
 }
 
 export function typeLabel(type) {
-  return TYPE_MAP[type]?.label || type;
+  return PSEUDO_LABELS[type] || TYPE_MAP[type]?.label || type;
 }
 
 export function typeColor(type) {
+  if (type === 'inspection') return '#d4a24c';
   return TYPE_MAP[type]?.color || '#687e91';
+}
+
+export function schemaForComponent(component) {
+  if (!component) return [];
+  if (component.type === 'workstation' && component.props?.stationType === 'inspection') {
+    return PROPERTY_SCHEMAS.workstation;
+  }
+  return PROPERTY_SCHEMAS[component.type] || [];
 }
