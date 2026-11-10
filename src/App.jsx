@@ -738,6 +738,7 @@ export default function App() {
         </div>
         <div className="project">
           ● {factory.name} <i>v0.0.3</i>
+          <a className="platform-entry" href="/login">Operations platform</a>
           <button className="ghost" onClick={() => setDialogOpen(true)} data-testid="open-file-dialog">
             <FolderOpen size={14} /> File
           </button>
