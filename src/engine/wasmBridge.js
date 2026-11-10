@@ -187,7 +187,6 @@ export function runWasmSimulation(factory, options = {}, module = wasmModule) {
       avgCycleTime: 0,
       avgWaitingTime: 0,
       wip: 0,
-      finalWip: 0,
       bottleneck: 'Add a complete production line',
       energyKwh: 0,
       stations: [],
