@@ -103,8 +103,11 @@ test('permission expansion supports exact keys, module wildcards and full wildca
 });
 
 test('home routing honours multi-role priority', () => {
-  assert.equal(resolveHome(['operator']), '/dashboard');
-  assert.equal(resolveHome(['hod', 'supervisor']), '/dashboard');
+  // Module 02 gives each operational role its own landing dashboard.
+  assert.equal(resolveHome(['operator']), '/operator');
+  assert.equal(resolveHome(['programmer']), '/programmer');
+  assert.equal(resolveHome(['hod', 'supervisor']), '/supervisor');
+  assert.equal(resolveHome(['hod']), '/dashboard');
   assert.equal(resolveHome(['finance']), '/approvals');
   assert.equal(resolveHome(['hr_analyst']), '/admin/employees');
   assert.equal(resolveHome(['plant_head', 'administrator']), '/admin/organization');
@@ -331,7 +334,8 @@ test('demo sign-in enforces credentials and suspended accounts', () => {
   const admin = demoLogin('admin@indra.example', DEMO_PASSWORD);
   assert.ok(admin.session?.employeeId);
   assert.equal(admin.employee.id, 'emp-002');
-  assert.equal(DEMO_ACCOUNTS.length, 6);
+  // Six Module 01 identities plus supervisor, programmer and EHS for Module 02.
+  assert.equal(DEMO_ACCOUNTS.length, 9);
 });
 
 test('demo workflow submits a request and honours segregation of duties', () => {
@@ -389,12 +393,15 @@ test('migrations define RLS for every public table and include storage hardening
 
 test('seed data covers every catalogue role and permission', () => {
   const seed = readFileSync(path.join(root, 'supabase', 'seed.sql'), 'utf8');
+  // Module 02 keeps its own seed file so Module 01 stays untouched.
+  const module2Seed = readFileSync(path.join(root, 'supabase', 'seed-module2.sql'), 'utf8');
+  const seeds = `${seed}\n${module2Seed}`;
   const authSeed = readFileSync(path.join(root, 'supabase', 'seed-auth.sql'), 'utf8');
   for (const permission of ALL_PERMISSION_KEYS) {
-    assert.ok(seed.includes(`'${permission}'`), `${permission} is seeded`);
+    assert.ok(seeds.includes(`'${permission}'`), `${permission} is seeded`);
   }
   for (const role of ROLES) {
-    assert.ok(seed.includes(`'${role.key}'`), `${role.key} is seeded`);
+    assert.ok(seeds.includes(`'${role.key}'`), `${role.key} is seeded`);
   }
   for (const account of DEMO_ACCOUNTS) {
     assert.ok(authSeed.includes(account.email), `${account.email} has a demo auth identity`);
@@ -402,4 +409,115 @@ test('seed data covers every catalogue role and permission', () => {
   assert.ok(authSeed.includes('IndraDemo!2026'));
   assert.ok(authSeed.includes("crypt('IndraDemo!2026'"));
   assert.ok(seed.trim().endsWith('commit;'));
+});
+
+// ---------------------------------------------------------------------------
+// Module 02 · workforce and production operations
+// ---------------------------------------------------------------------------
+const MODULE2_MIGRATIONS = [
+  '20261110000800_workforce_production.sql',
+  '20261110000900_workforce_rls.sql',
+  '20261110001000_workforce_rpcs.sql',
+  '20261110001100_workforce_storage.sql',
+];
+
+test('module 02 schema adds the production tables with row level security', () => {
+  const schema = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[0]), 'utf8');
+  const rls = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[1]), 'utf8');
+  const expected = [
+    'products', 'materials', 'tools', 'production_orders', 'task_events', 'production_reports',
+    'production_report_materials', 'technical_issues', 'tool_damage_reports', 'safety_incidents',
+    'safety_incident_details', 'shift_reports', 'shift_report_tasks', 'material_requests',
+    'reassignment_requests', 'machine_programs', 'machine_program_versions',
+    'employee_machine_authorizations',
+  ];
+  const created = [...schema.matchAll(/create table public\.([a-z_]+)/g)].map((match) => match[1]);
+  for (const table of expected) {
+    assert.ok(created.includes(table), `${table} is created`);
+    assert.ok(
+      rls.includes(`alter table public.${table} enable row level security`),
+      `${table} has row level security enabled`,
+    );
+  }
+});
+
+test('production reporting cannot double count rework', () => {
+  const schema = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[0]), 'utf8');
+  assert.ok(schema.includes('check (total_produced = good_pieces + rejected_pieces)'));
+  assert.ok(schema.includes('check (rework_pieces <= rejected_pieces)'));
+  const rpcs = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[2]), 'utf8');
+  assert.ok(rpcs.includes('Rework is counted inside rejects, not added again.'));
+});
+
+test('material units are validated against the material master', () => {
+  const schema = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[0]), 'utf8');
+  assert.ok(schema.includes('create or replace function public.validate_material_unit()'));
+  assert.ok(schema.includes('is not compatible with material unit'));
+  const rpcs = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[2]), 'utf8');
+  assert.ok(rpcs.includes('is not a compatible unit'));
+});
+
+test('approved machine programs are immutable and reviewed independently', () => {
+  const schema = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[0]), 'utf8');
+  const rpcs = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[2]), 'utf8');
+  assert.ok(schema.includes('protect_approved_program_version'));
+  assert.ok(schema.includes('is immutable; register a new version instead'));
+  assert.ok(rpcs.includes('the author cannot approve their own program version'));
+  const storage = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[3]), 'utf8');
+  assert.ok(storage.includes("'machine-programs'"));
+  assert.ok(storage.includes("bucket_id = 'machine-programs'"));
+  assert.ok(storage.includes('and not exists ('), 'approved payloads cannot be deleted');
+});
+
+test('restricted medical detail is separated from operational safety records', () => {
+  const schema = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[0]), 'utf8');
+  const rls = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[1]), 'utf8');
+  assert.ok(schema.includes('create table public.safety_incident_details'));
+  assert.ok(schema.includes('Anything clinical belongs in safety_incident_details'));
+  const detailPolicy = rls.slice(rls.indexOf('create policy safety_incident_details_select'));
+  assert.ok(detailPolicy.slice(0, 400).includes("has_permission('safety.medical.read')"));
+  assert.ok(rls.includes('Clinical detail is withheld from supervisors by policy'));
+});
+
+test('operators cannot reassign their own work', () => {
+  const rls = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[1]), 'utf8');
+  assert.ok(rls.includes('guard_task_assignment'));
+  assert.ok(rls.includes('Task assignment can only be changed by a supervisor'));
+  const rpcs = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[2]), 'utf8');
+  assert.ok(rpcs.includes("Only a supervisor can cancel or reassign a task."));
+});
+
+test('reassignment validates availability, competency and machine authorisation', () => {
+  const rpcs = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[2]), 'utf8');
+  assert.ok(rpcs.includes('is on approved leave for the proposed effective date'));
+  assert.ok(rpcs.includes('requires a skill'));
+  assert.ok(rpcs.includes('requires a valid certification'));
+  assert.ok(rpcs.includes('is not authorised to operate the proposed machine'));
+  assert.ok(rpcs.includes('Shift overlap'));
+  assert.ok(rpcs.includes('exceeds the 12 hour working limit'));
+  // Approval applies the change; until then the original assignment is kept.
+  assert.ok(rpcs.includes('requests_apply_reassignment'));
+  assert.ok(rpcs.includes("v_detail.status <> 'applied'"));
+});
+
+test('module 02 requests use the shared approval workflow', () => {
+  const rpcs = readFileSync(path.join(root, 'supabase', 'migrations', MODULE2_MIGRATIONS[2]), 'utf8');
+  assert.ok(rpcs.includes('public.submit_request('));
+  assert.ok(rpcs.includes("'material_requirement'"));
+  assert.ok(rpcs.includes("'reassignment'"));
+  const seed = readFileSync(path.join(root, 'supabase', 'seed-module2.sql'), 'utf8');
+  for (const type of ['reassignment', 'material_requirement', 'technical_repair', 'equipment_request', 'manpower_request', 'program_modification']) {
+    assert.ok(seed.includes(`'${type}'`), `${type} has an approval authority`);
+  }
+});
+
+test('module 02 seed provides a working operator shift', () => {
+  const seed = readFileSync(path.join(root, 'supabase', 'seed-module2.sql'), 'utf8');
+  assert.ok(seed.includes('insert into public.production_orders'));
+  assert.ok(seed.includes('insert into public.production_reports'));
+  assert.ok(seed.includes('insert into public.machine_program_versions'));
+  assert.ok(seed.includes('insert into public.reassignment_requests'));
+  assert.ok(seed.includes("'in_review'"));
+  // Totals in the seed must satisfy the arithmetic constraint.
+  assert.ok(seed.includes('32, 30, 2'));
 });

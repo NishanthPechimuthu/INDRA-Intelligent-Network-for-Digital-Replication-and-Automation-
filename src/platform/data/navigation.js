@@ -19,6 +19,22 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    id: 'workforce',
+    label: 'Workforce & production',
+    items: [
+      { to: '/operator', label: 'Operator dashboard', icon: 'UserRoundCheck', permission: 'tasks.read.self' },
+      { to: '/supervisor', label: 'Supervisor dashboard', icon: 'LayoutDashboard', permission: 'workforce.team.read' },
+      { to: '/programmer', label: 'Programmer dashboard', icon: 'Server', permission: 'programs.read' },
+      { to: '/production/tasks', label: 'Task board', icon: 'ClipboardList', permission: 'tasks.read.self' },
+      { to: '/production/orders', label: 'Production orders', icon: 'Factory', permission: 'production.orders.read' },
+      { to: '/production/reports', label: 'Production reporting', icon: 'Gauge', permission: 'production.reports.create' },
+      { to: '/operations/issues', label: 'Issue reporting', icon: 'AlertTriangle', permission: 'production.issues.create' },
+      { to: '/operations/reassignment', label: 'Reassignments', icon: 'UserRoundCheck', permission: 'reassignment.create' },
+      { to: '/operations/handover', label: 'Shift handover', icon: 'ClipboardCheck', permission: 'handover.submit' },
+      { to: '/work-history', label: 'Work history', icon: 'History', permission: 'tasks.read.self' },
+    ],
+  },
+  {
     id: 'people',
     label: 'People & access',
     items: [
@@ -26,6 +42,9 @@ export const NAV_SECTIONS = [
       { to: '/admin/employees', label: 'Employees', icon: 'Users', permission: 'employees.read' },
       { to: '/admin/roles', label: 'Roles & permissions', icon: 'ShieldCheck', permission: 'roles.read' },
       { to: '/admin/shifts', label: 'Shift management', icon: 'CalendarDays', permission: 'shifts.read' },
+      { to: '/workforce/employees', label: 'Employee directory', icon: 'Users', permission: 'employees.read' },
+      { to: '/workforce/schedule', label: 'Shift schedule', icon: 'CalendarClock', permission: 'shifts.read' },
+      { to: '/workforce/attendance', label: 'Attendance register', icon: 'Fingerprint', permission: 'attendance.read.self' },
     ],
   },
   {

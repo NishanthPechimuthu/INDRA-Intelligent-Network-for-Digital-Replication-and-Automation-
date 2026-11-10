@@ -1,5 +1,6 @@
 import { ROLES, ROLE_BY_KEY } from './accessControl.js';
 import { addDays, dateKey, evaluateAttendance, isWorkingDay, shiftWindow } from '../lib/shift.js';
+import { withProductionDemo } from './demoProduction.js';
 
 /**
  * Deterministic demo dataset used when Supabase environment variables are absent.
@@ -253,6 +254,9 @@ export const DEMO_ACCOUNTS = [
   { employeeId: 'emp-003', email: 'arjun.mehta@indra.example', label: 'Operator · Night shift', roles: ['Operator'], password: DEMO_PASSWORD },
   { employeeId: 'emp-004', email: 'priya.nair@indra.example', label: 'HR Analyst · Chennai', roles: ['HR Analyst'], password: DEMO_PASSWORD },
   { employeeId: 'emp-005', email: 'vikram.singh@indra.example', label: 'Quality Engineer · Pune', roles: ['Quality Engineer', 'Verification Engineer'], password: DEMO_PASSWORD },
+  { employeeId: 'emp-008', email: 'karthik.subramanian@indra.example', label: 'Supervisor · Machining', roles: ['Supervisor'], password: DEMO_PASSWORD },
+  { employeeId: 'emp-009', email: 'divya.sharma@indra.example', label: 'Programmer · Digital twin', roles: ['Programmer'], password: DEMO_PASSWORD },
+  { employeeId: 'emp-010', email: 'rahul.verma@indra.example', label: 'EHS Officer · Pune', roles: ['EHS Officer'], password: DEMO_PASSWORD },
   { employeeId: 'emp-015', email: 'customer@partner.example', label: 'Customer Approver · External', roles: ['Customer Approver'], password: DEMO_PASSWORD },
 ];
 
@@ -599,7 +603,7 @@ export function createDemoData() {
     { employeeId: 'emp-010', bloodGroup: 'O+', allergies: 'None', conditions: 'Asthma (controlled)', emergencyContactName: 'Sneha Verma', emergencyContactPhone: '+91 98400 22010', lastCheckupOn: '2026-06-02', notes: 'Restricted — occupational health.' },
   ];
 
-  return {
+  return withProductionDemo({
     organization: ORGANIZATION,
     plants: PLANTS,
     departments: DEPARTMENTS,
@@ -637,7 +641,7 @@ export function createDemoData() {
       { id: 'session-current', userAgent: 'Chrome · Linux', ipAddress: '10.20.1.18', createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), lastSeenAt: new Date().toISOString(), current: true },
       { id: 'session-mobile', userAgent: 'INDRA Mobile · Android', ipAddress: '49.207.14.22', createdAt: new Date(Date.now() - 26 * 3600000).toISOString(), lastSeenAt: new Date(Date.now() - 5 * 3600000).toISOString(), current: false },
     ],
-  };
+  });
 }
 
 /** Context payload equivalent to the Supabase `get_my_context()` RPC. */

@@ -224,6 +224,46 @@ The SQL is verified by executing every migration against PostgreSQL 16 with the 
 and `storage` schemas stubbed, then applying both seed files and asserting RLS behaviour. Results
 are recorded in [docs/INTEGRATION_REPORT.md](docs/INTEGRATION_REPORT.md).
 
+## Workforce & production operations (Module 02)
+
+Module 02 extends the same platform — no second application, no second employee store. Operator,
+supervisor and programmer workspaces reuse the Module 01 identity, organization, shift, role and
+approval infrastructure.
+
+| Area | Routes | What it does |
+| --- | --- | --- |
+| Operator | `/operator`, `/production/tasks`, `/work-history` | Shift, machine and assigned production; accept, start, pause (with reason), resume, report completion |
+| Supervisor | `/supervisor` | Team presence, target versus actual, open tickets, material requests, pending reassignments, shift reports |
+| Programmer | `/programmer` | Assigned machines, program versions, revision history, review/approval, signed audited downloads |
+| Reporting | `/production/reports` | Good / rejected / rework entry with downtime, material consumption and evidence |
+| Issues | `/operations/issues` | Technical fault, tool damage, material requirement and restricted safety reporting |
+| Workforce | `/workforce/employees`, `/workforce/schedule`, `/workforce/attendance` | Directory, weekly roster and daily attendance register |
+| Workflow | `/operations/reassignment`, `/operations/handover` | Reassignment proposals through approval; shift completion and handover |
+
+Guarantees enforced in PostgreSQL, not in the interface:
+
+- **No self-reassignment.** A trigger rejects any change to a task's assignee, machine, workstation
+  or target unless the caller holds `tasks.manage`.
+- **Rework never inflates output.** `total_produced = good_pieces + rejected_pieces` and
+  `rework_pieces <= rejected_pieces` are check constraints, re-validated in the RPC with a readable
+  message.
+- **Reassignments need approval.** Proposals validate approved leave, employment status, required
+  skills and verified certifications, shift overlap, the 12-hour working limit and machine
+  authorisation before a request is created. The original assignment is untouched until the
+  configured approver decides; approval applies the move and records who decided and when.
+- **Restricted medical data.** Clinical detail lives in `safety_incident_details`, readable only with
+  `safety.medical.read`; supervisors receive the operational record only.
+- **Approved programs are immutable.** A trigger rejects any rewrite of an approved version's payload
+  or revision fields; new work must register a new version. Authors cannot approve their own version,
+  and every program download is audited through `log_program_access`.
+- **Material units are enforced.** A line item must use the unit declared for its material, checked by
+  trigger and again in the request RPC.
+
+Seed data: `supabase/seed-module2.sql` (permissions, role grants, approval routing, products,
+materials, tools, orders, tasks, reports, issues, programs, one pending reassignment). Demo identities
+now include `karthik.subramanian@indra.example` (supervisor), `divya.sharma@indra.example`
+(programmer) and `rahul.verma@indra.example` (EHS) — same demo password.
+
 ## Interaction
 
 - **Camera**: left-drag orbits, middle/right-drag pans, wheel zooms. Top view uses an orthographic

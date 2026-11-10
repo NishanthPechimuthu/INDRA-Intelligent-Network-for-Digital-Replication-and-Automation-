@@ -735,3 +735,511 @@ export function signOutOtherSessions() {
 }
 
 export { DEMO_PASSWORD };
+
+// ---------------------------------------------------------------------------
+// Module 02 · workforce and production operations (demo equivalents of the RPCs)
+// ---------------------------------------------------------------------------
+const DEMO_TASK_STATUS_TO_STATUS = {
+  in_progress: 'in_progress',
+  paused: 'blocked',
+  blocked: 'blocked',
+  completed: 'done',
+  cancelled: 'cancelled',
+  accepted: 'todo',
+  assigned: 'todo',
+};
+
+export function transitionProductionTask(taskId, nextStatus, reason, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const task = (data.productionTasks || []).find((item) => item.id === taskId);
+    if (!task) throw new Error('Task not found');
+    task.productionStatus = nextStatus;
+    task.status = DEMO_TASK_STATUS_TO_STATUS[nextStatus] || task.status;
+    if (nextStatus === 'accepted') task.acceptedAt = new Date().toISOString();
+    if (nextStatus === 'in_progress') task.startedAt = task.startedAt || new Date().toISOString();
+    if (nextStatus === 'paused' || nextStatus === 'blocked') task.pausedReason = reason || 'No reason recorded';
+    if (nextStatus === 'completed' || nextStatus === 'cancelled') task.pausedReason = null;
+    data.taskEvents = data.taskEvents || [];
+    data.taskEvents.unshift({
+      id: `task-event-${Date.now()}`,
+      organizationId: task.organizationId,
+      taskId: task.id,
+      employeeId: actorEmployeeId,
+      event: nextStatus,
+      reason: reason || null,
+      createdAt: new Date().toISOString(),
+    });
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: task.organizationId,
+      actorEmployeeId,
+      action: `task.${nextStatus}`,
+      entityType: 'task',
+      entityId: task.id,
+      summary: `Task “${task.title}” moved to ${nextStatus.replaceAll('_', ' ')}`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return task;
+  });
+}
+
+export function recordProductionReport(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const total = Number(payload.totalProduced || 0);
+    const good = Number(payload.goodPieces || 0);
+    const rejected = Number(payload.rejectedPieces || 0);
+    const rework = Number(payload.reworkPieces || 0);
+    if (total !== good + rejected) {
+      throw new Error('Total produced must equal good pieces plus rejected pieces. Rework is counted inside rejects.');
+    }
+    if (rework > rejected) throw new Error('Rework pieces cannot exceed rejected pieces.');
+    const order = (data.productionOrders || []).find((item) => item.id === payload.productionOrderId);
+    if (!order) throw new Error('Production order not found');
+
+    const report = {
+      id: `report-${Date.now()}`,
+      organizationId: order.organizationId,
+      productionOrderId: order.id,
+      taskId: payload.taskId || null,
+      productId: payload.productId || order.productId,
+      workstationId: payload.workstationId || null,
+      machineId: payload.machineId || null,
+      shiftId: payload.shiftId || null,
+      reportedByEmployeeId: actorEmployeeId,
+      workDate: payload.workDate || new Date().toISOString().slice(0, 10),
+      shiftCode: payload.shiftCode || null,
+      batchNo: payload.batchNo || order.batchNo,
+      startedAt: payload.startedAt,
+      endedAt: payload.endedAt,
+      totalProduced: total,
+      goodPieces: good,
+      rejectedPieces: rejected,
+      reworkPieces: rework,
+      downtimeMinutes: Number(payload.downtimeMinutes || 0),
+      downtimeReason: payload.downtimeReason || null,
+      remarks: payload.remarks || null,
+    };
+    data.productionReports = [report, ...(data.productionReports || [])];
+
+    (payload.materials || []).forEach((item, index) => {
+      const material = (data.materials || []).find((row) => row.id === item.materialId);
+      if (!material) throw new Error('Material not found');
+      if (material.unit !== item.unit) throw new Error(`Material ${material.name} is measured in ${material.unit}.`);
+      data.reportMaterials = [{
+        id: `report-material-${Date.now()}-${index}`,
+        organizationId: report.organizationId,
+        reportId: report.id,
+        materialId: item.materialId,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+      }, ...(data.reportMaterials || [])];
+      material.stockQuantity = Math.max(Number(material.stockQuantity || 0) - Number(item.quantity), 0);
+    });
+
+    const task = (data.productionTasks || []).find((item) => item.id === payload.taskId);
+    if (task) {
+      const taskReports = data.productionReports.filter((row) => row.taskId === task.id);
+      task.completedQuantity = taskReports.reduce((sum, row) => sum + Number(row.goodPieces || 0), 0);
+      task.rejectedQuantity = taskReports.reduce((sum, row) => sum + Number(row.rejectedPieces || 0), 0);
+    }
+    const orderReports = data.productionReports.filter((row) => row.productionOrderId === order.id);
+    order.quantityCompleted = orderReports.reduce((sum, row) => sum + Number(row.goodPieces || 0), 0);
+    order.quantityRejected = orderReports.reduce((sum, row) => sum + Number(row.rejectedPieces || 0), 0);
+    if (order.status === 'planned') order.status = 'in_progress';
+    if (order.quantityCompleted >= order.quantityPlanned) order.status = 'completed';
+
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: order.organizationId,
+      actorEmployeeId,
+      action: 'production.reported',
+      entityType: 'production_report',
+      entityId: report.id,
+      summary: `Reported ${total} pcs (${good} good / ${rejected} rejected) on order ${order.orderNo}`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return report;
+  });
+}
+
+export function createTechnicalIssue(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const issue = {
+      id: `issue-tech-${Date.now()}`,
+      organizationId: 'org-indra-demo',
+      reportedByEmployeeId: actorEmployeeId,
+      occurredAt: payload.occurredAt || new Date().toISOString(),
+      status: 'open',
+      downtimeMinutes: Number(payload.downtimeMinutes || 0),
+      ...payload,
+    };
+    data.technicalIssues = [issue, ...(data.technicalIssues || [])];
+    const machine = (data.machines || []).find((item) => item.id === payload.machineId);
+    if (machine && payload.machineState === 'down') machine.status = 'down';
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: issue.organizationId,
+      actorEmployeeId,
+      action: 'issue.technical',
+      entityType: 'technical_issue',
+      entityId: issue.id,
+      summary: `Reported technical issue on ${machine?.name || payload.machineId}`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return issue;
+  });
+}
+
+export function createToolDamage(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const tool = (data.tools || []).find((item) => item.id === payload.toolId);
+    const report = {
+      id: `tool-damage-${Date.now()}`,
+      organizationId: 'org-indra-demo',
+      reportedByEmployeeId: actorEmployeeId,
+      status: 'open',
+      toolName: tool?.name || 'Tool',
+      unit: tool?.unit || 'pcs',
+      ...payload,
+    };
+    data.toolDamageReports = [report, ...(data.toolDamageReports || [])];
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: report.organizationId,
+      actorEmployeeId,
+      action: 'issue.tool_damage',
+      entityType: 'tool_damage_report',
+      entityId: report.id,
+      summary: `Reported damage to ${report.toolName}`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return report;
+  });
+}
+
+export function createMaterialRequest(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const material = (data.materials || []).find((item) => item.id === payload.materialId);
+    if (!material) throw new Error('Material not found');
+    if (payload.unit && payload.unit !== material.unit) {
+      throw new Error(`Material ${material.name} is measured in ${material.unit}.`);
+    }
+    const request = {
+      id: `req-material-${Date.now()}`,
+      organizationId: 'org-indra-demo',
+      employeeId: actorEmployeeId,
+      requestType: 'material_requirement',
+      title: payload.title || `Material requirement · ${material.name}`,
+      details: payload.reason || 'Material required for production.',
+      status: 'submitted',
+      currentApproverId: 'emp-001',
+      departmentId: 'dept-production',
+      plantId: 'plant-chennai',
+      customerVisible: false,
+      submittedAt: new Date().toISOString(),
+    };
+    data.requests = [request, ...(data.requests || [])];
+    data.materialRequests = [{
+      requestId: request.id,
+      organizationId: request.organizationId,
+      materialId: material.id,
+      specification: payload.specification || material.specification,
+      requiredQuantity: Number(payload.requiredQuantity),
+      unit: material.unit,
+      availableQuantity: payload.availableQuantity ?? material.stockQuantity,
+      requiredBy: payload.requiredBy || null,
+      productionOrderId: payload.productionOrderId || null,
+      reason: payload.reason || null,
+    }, ...(data.materialRequests || [])];
+    data.approvals = [{
+      id: `approval-${Date.now()}`,
+      organizationId: request.organizationId,
+      requestId: request.id,
+      step: 1,
+      approverEmployeeId: 'emp-001',
+      status: 'pending',
+    }, ...(data.approvals || [])];
+    data.notifications = [{
+      id: `notification-${Date.now()}`,
+      organizationId: request.organizationId,
+      recipientEmployeeId: 'emp-001',
+      title: `Approval required: ${request.title}`,
+      body: 'A material requirement was submitted.',
+      category: 'approval',
+      link: '/approvals',
+      readAt: null,
+      createdAt: new Date().toISOString(),
+    }, ...(data.notifications || [])];
+    return request;
+  });
+}
+
+export function createReassignment(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const employee = (data.employees || []).find((item) => item.id === payload.employeeId);
+    if (!employee) throw new Error('Employee not found');
+    if (!payload.reason || payload.reason.trim().length < 5) throw new Error('A reassignment reason is required.');
+    if (employee.employmentStatus !== 'active') {
+      throw new Error(`${employee.fullName} is not in an active employment status.`);
+    }
+    const effectiveDate = (payload.effectiveAt || new Date().toISOString()).slice(0, 10);
+    const onLeave = (data.leaveRecords || []).some(
+      (leave) => leave.employeeId === employee.id && leave.status === 'approved'
+        && leave.startDate <= effectiveDate && leave.endDate >= effectiveDate,
+    );
+    if (onLeave) throw new Error(`${employee.fullName} is on approved leave for that date.`);
+
+    const proposedTask = (data.productionTasks || []).find((task) => task.id === payload.proposedTaskId);
+    const machineId = proposedTask?.machineId || payload.proposedMachineId;
+    if (machineId) {
+      const authorized = (data.machineAuthorizations || []).some(
+        (row) => row.employeeId === employee.id && row.machineId === machineId
+          && (!row.expiresOn || row.expiresOn >= effectiveDate),
+      );
+      if (!authorized) throw new Error(`${employee.fullName} is not authorised to operate the proposed machine.`);
+    }
+
+    const request = {
+      id: `req-reassign-${Date.now()}`,
+      organizationId: 'org-indra-demo',
+      employeeId: actorEmployeeId,
+      requestType: 'reassignment',
+      title: payload.title || `Reassignment · ${employee.fullName}`,
+      details: payload.reason,
+      status: 'submitted',
+      currentApproverId: 'emp-001',
+      departmentId: employee.departmentId,
+      plantId: employee.plantId,
+      customerVisible: false,
+      submittedAt: new Date().toISOString(),
+    };
+    data.requests = [request, ...(data.requests || [])];
+    data.approvals = [{
+      id: `approval-${Date.now()}`,
+      organizationId: request.organizationId,
+      requestId: request.id,
+      step: 1,
+      approverEmployeeId: 'emp-001',
+      status: 'pending',
+    }, ...(data.approvals || [])];
+    data.reassignmentRequests = [{
+      requestId: request.id,
+      organizationId: request.organizationId,
+      employeeId: employee.id,
+      currentTaskId: payload.currentTaskId || null,
+      proposedTaskId: payload.proposedTaskId || null,
+      currentWorkstationId: payload.currentWorkstationId || null,
+      proposedWorkstationId: payload.proposedWorkstationId || null,
+      currentShiftId: payload.currentShiftId || null,
+      proposedShiftId: payload.proposedShiftId || null,
+      competencyRequirements: payload.competencyRequirements || null,
+      reason: payload.reason,
+      effectiveAt: payload.effectiveAt || new Date().toISOString(),
+      status: 'submitted',
+      approvedByEmployeeId: null,
+      decidedAt: null,
+      appliedAt: null,
+      createdByEmployeeId: actorEmployeeId,
+    }, ...(data.reassignmentRequests || [])];
+    return request;
+  });
+}
+
+export function submitShiftReport(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const total = Number(payload.totalProduced || 0);
+    const good = Number(payload.goodPieces || 0);
+    const rejected = Number(payload.rejectedPieces || 0);
+    if (total !== good + rejected) throw new Error('Shift totals must balance: total produced = good + rejected.');
+    if (!payload.handoverNotes?.trim()) throw new Error('Handover notes are required.');
+    const report = {
+      id: `shift-report-${Date.now()}`,
+      organizationId: 'org-indra-demo',
+      employeeId: actorEmployeeId,
+      workDate: payload.workDate || new Date().toISOString().slice(0, 10),
+      status: 'submitted',
+      submittedAt: new Date().toISOString(),
+      acknowledgedByEmployeeId: null,
+      acknowledgedAt: null,
+      tasksCompleted: Number(payload.tasksCompleted || 0),
+      totalProduced: total,
+      goodPieces: good,
+      rejectedPieces: rejected,
+      machineIssueCount: Number(payload.machineIssueCount || 0),
+      toolIssueCount: Number(payload.toolIssueCount || 0),
+      materialShortageCount: Number(payload.materialShortageCount || 0),
+      ...payload,
+    };
+    data.shiftReports = [report, ...(data.shiftReports || [])];
+    data.shiftReportTasks = [
+      ...(payload.taskIds || []).map((taskId) => ({ reportId: report.id, taskId })),
+      ...(data.shiftReportTasks || []),
+    ];
+    return report;
+  });
+}
+
+export function acknowledgeShiftReport(reportId, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const report = (data.shiftReports || []).find((item) => item.id === reportId);
+    if (!report) throw new Error('Shift report not found');
+    report.status = 'acknowledged';
+    report.acknowledgedByEmployeeId = actorEmployeeId;
+    report.acknowledgedAt = new Date().toISOString();
+    return report;
+  });
+}
+
+export function registerProgramVersion(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const program = (data.machinePrograms || []).find((item) => item.id === payload.programId);
+    if (!program) throw new Error('Machine program not found');
+    if (!payload.changeSummary?.trim()) throw new Error('A change summary is required for every program version.');
+    const nextVersion = Math.max(0, ...(data.programVersions || [])
+      .filter((version) => version.programId === program.id)
+      .map((version) => version.version)) + 1;
+    const version = {
+      id: `program-version-${Date.now()}`,
+      organizationId: program.organizationId,
+      programId: program.id,
+      version: nextVersion,
+      status: 'draft',
+      fileName: payload.fileName || `program_v${nextVersion}.nc`,
+      storagePath: payload.storagePath || `org-indra-demo/${program.machineId}/${program.id}/v${nextVersion}.nc`,
+      mimeType: payload.mimeType || 'text/plain',
+      sizeBytes: payload.sizeBytes || null,
+      checksum: payload.checksum || null,
+      changeSummary: payload.changeSummary,
+      revisionNotes: payload.revisionNotes || null,
+      productionOrderId: payload.productionOrderId || null,
+      createdByEmployeeId: actorEmployeeId,
+      submittedAt: new Date().toISOString(),
+      approvedByEmployeeId: null,
+      approvedAt: null,
+      decisionNotes: null,
+      supersededByVersionId: null,
+    };
+    data.programVersions = [version, ...(data.programVersions || [])];
+    return version;
+  });
+}
+
+export function decideProgramVersion(versionId, decision, notes, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const version = (data.programVersions || []).find((item) => item.id === versionId);
+    if (!version) throw new Error('Program version not found');
+    if (version.createdByEmployeeId === actorEmployeeId) {
+      throw new Error('Segregation of duties: the author cannot approve their own program version.');
+    }
+    const program = (data.machinePrograms || []).find((item) => item.id === version.programId);
+    if (decision === 'rejected') {
+      version.status = 'rejected';
+      version.approvedByEmployeeId = actorEmployeeId;
+      version.approvedAt = new Date().toISOString();
+      version.decisionNotes = notes || null;
+      return version;
+    }
+    (data.programVersions || [])
+      .filter((row) => row.programId === version.programId && row.status === 'approved')
+      .forEach((row) => {
+        row.status = 'superseded';
+        row.supersededByVersionId = version.id;
+      });
+    version.status = 'approved';
+    version.approvedByEmployeeId = actorEmployeeId;
+    version.approvedAt = new Date().toISOString();
+    version.decisionNotes = notes || null;
+    if (program) {
+      program.status = 'approved';
+      program.currentVersion = version.version;
+      program.approvedVersionId = version.id;
+    }
+    return version;
+  });
+}
+
+export function updateIssueStatus(issueId, status, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const issue = (data.technicalIssues || []).find((item) => item.id === issueId);
+    if (!issue) throw new Error('Issue not found');
+    issue.status = status;
+    if (status === 'resolved' || status === 'closed') issue.resolvedAt = new Date().toISOString();
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: issue.organizationId,
+      actorEmployeeId,
+      action: `issue.${status}`,
+      entityType: 'technical_issue',
+      entityId: issue.id,
+      summary: `Technical issue moved to ${status}`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return issue;
+  });
+}
+
+export function createProductionTask(payload, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const task = {
+      id: `task-prod-${Date.now()}`,
+      organizationId: 'org-indra-demo',
+      assigneeEmployeeId: payload.assigneeEmployeeId,
+      createdByEmployeeId: actorEmployeeId,
+      supervisorEmployeeId: actorEmployeeId,
+      projectId: payload.projectId || null,
+      productionOrderId: payload.productionOrderId || null,
+      workstationId: payload.workstationId || null,
+      machineId: payload.machineId || null,
+      title: payload.title,
+      description: payload.description || null,
+      workInstructions: payload.workInstructions || null,
+      status: 'todo',
+      priority: payload.priority || 'medium',
+      dueAt: payload.dueAt || null,
+      plannedStartAt: payload.plannedStartAt || null,
+      plannedEndAt: payload.plannedEndAt || null,
+      targetQuantity: Number(payload.targetQuantity) || null,
+      completedQuantity: 0,
+      rejectedQuantity: 0,
+      productionStatus: 'assigned',
+    };
+    data.productionTasks = [task, ...(data.productionTasks || [])];
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: task.organizationId,
+      actorEmployeeId,
+      action: 'task.created',
+      entityType: 'task',
+      entityId: task.id,
+      summary: `Created production task “${task.title}”`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return task;
+  });
+}
+
+export function updateTaskPriority(taskId, priority, actorEmployeeId) {
+  return mutateDemoData((data) => {
+    const task = (data.productionTasks || []).find((item) => item.id === taskId);
+    if (!task) throw new Error('Task not found');
+    task.priority = priority;
+    data.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      organizationId: task.organizationId,
+      actorEmployeeId,
+      action: 'task.priority',
+      entityType: 'task',
+      entityId: task.id,
+      summary: `Set priority of “${task.title}” to ${priority}`,
+      ipAddress: 'demo',
+      createdAt: new Date().toISOString(),
+    });
+    return task;
+  });
+}

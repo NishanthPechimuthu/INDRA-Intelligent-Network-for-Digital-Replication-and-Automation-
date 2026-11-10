@@ -29,6 +29,19 @@ export const PROTECTED_ROUTES = [
   '/admin/employees',
   '/admin/roles',
   '/admin/shifts',
+  '/operator',
+  '/supervisor',
+  '/programmer',
+  '/workforce/employees',
+  '/workforce/schedule',
+  '/workforce/attendance',
+  '/production/tasks',
+  '/production/orders',
+  '/production/reports',
+  '/operations/issues',
+  '/operations/reassignment',
+  '/operations/handover',
+  '/work-history',
 ];
 
 export const ROUTE_TITLES = {
@@ -53,6 +66,19 @@ export const ROUTE_TITLES = {
   '/admin/employees': 'Employees',
   '/admin/roles': 'Roles & permissions',
   '/admin/shifts': 'Shift management',
+  '/operator': 'Operator dashboard',
+  '/supervisor': 'Supervisor dashboard',
+  '/programmer': 'Programmer dashboard',
+  '/workforce/employees': 'Employee directory',
+  '/workforce/schedule': 'Shift schedule',
+  '/workforce/attendance': 'Attendance register',
+  '/production/tasks': 'Task board',
+  '/production/orders': 'Production orders',
+  '/production/reports': 'Production reporting',
+  '/operations/issues': 'Issue reporting',
+  '/operations/reassignment': 'Reassignment requests',
+  '/operations/handover': 'Shift handover',
+  '/work-history': 'Work history',
 };
 
 /** The studio is public and owns the root path so existing deep links keep working. */

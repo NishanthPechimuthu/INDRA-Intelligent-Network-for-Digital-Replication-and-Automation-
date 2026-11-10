@@ -49,6 +49,25 @@ const TABLES = [
   ['invitations', 500],
   ['documents', 1000],
   ['employee_medical', 100],
+  // Module 02 · workforce and production operations
+  ['products', 500],
+  ['materials', 1000],
+  ['tools', 1000],
+  ['production_orders', 2000],
+  ['task_events', 5000],
+  ['production_reports', 4000],
+  ['production_report_materials', 8000],
+  ['technical_issues', 2000],
+  ['tool_damage_reports', 1000],
+  ['safety_incidents', 1000],
+  ['safety_incident_details', 500],
+  ['shift_reports', 2000],
+  ['shift_report_tasks', 4000],
+  ['material_requests', 1000],
+  ['reassignment_requests', 1000],
+  ['machine_programs', 1000],
+  ['machine_program_versions', 4000],
+  ['employee_machine_authorizations', 2000],
 ];
 
 function unwrap(settled, name) {
@@ -67,6 +86,13 @@ async function fetchTable(name, limit) {
   if (name === 'notifications') query = query.order('created_at', { ascending: false });
   if (name === 'tasks') query = query.order('due_at', { ascending: true });
   if (name === 'requests') query = query.order('submitted_at', { ascending: false });
+  if (name === 'production_orders') query = query.order('planned_start_at', { ascending: true });
+  if (name === 'production_reports') query = query.order('work_date', { ascending: false });
+  if (name === 'task_events') query = query.order('created_at', { ascending: false });
+  if (name === 'technical_issues') query = query.order('occurred_at', { ascending: false });
+  if (name === 'safety_incidents') query = query.order('incident_at', { ascending: false });
+  if (name === 'shift_reports') query = query.order('work_date', { ascending: false });
+  if (name === 'machine_program_versions') query = query.order('version', { ascending: false });
   return query;
 }
 
@@ -105,6 +131,24 @@ function buildWorkspace(rows, context) {
     invitations: rows.invitations || [],
     documents: rows.documents || [],
     medicalRecords: rows.employee_medical || [],
+    products: rows.products || [],
+    materials: rows.materials || [],
+    tools: rows.tools || [],
+    productionOrders: rows.production_orders || [],
+    taskEvents: rows.task_events || [],
+    productionReports: rows.production_reports || [],
+    reportMaterials: rows.production_report_materials || [],
+    technicalIssues: rows.technical_issues || [],
+    toolDamageReports: rows.tool_damage_reports || [],
+    safetyIncidents: rows.safety_incidents || [],
+    safetyIncidentDetails: rows.safety_incident_details || [],
+    shiftReports: rows.shift_reports || [],
+    shiftReportTasks: rows.shift_report_tasks || [],
+    materialRequests: rows.material_requests || [],
+    reassignmentRequests: rows.reassignment_requests || [],
+    machinePrograms: rows.machine_programs || [],
+    programVersions: rows.machine_program_versions || [],
+    machineAuthorizations: rows.employee_machine_authorizations || [],
     sessions: [],
   };
 
@@ -171,6 +215,16 @@ function buildWorkspace(rows, context) {
   });
 
   data.employeesById = Object.fromEntries(data.employees.map((employee) => [employee.id, employee]));
+  // Module 02 reads the same tasks table; production tasks are the subset that
+  // carries a production order. Demo mode supplies `productionTasks` directly.
+  data.productionTasks = (data.productionTasks?.length ? data.productionTasks : data.tasks).filter(
+    (task) => task.productionOrderId || task.productionStatus,
+  );
+  data.productsById = Object.fromEntries(data.products.map((item) => [item.id, item]));
+  data.materialsById = Object.fromEntries(data.materials.map((item) => [item.id, item]));
+  data.toolsById = Object.fromEntries(data.tools.map((item) => [item.id, item]));
+  data.productionOrdersById = Object.fromEntries(data.productionOrders.map((item) => [item.id, item]));
+  data.machineProgramsById = Object.fromEntries(data.machinePrograms.map((item) => [item.id, item]));
   data.shiftAssignments = data.shiftAssignments.map((assignment) => ({
     ...assignment,
     status: assignment.status || 'active',

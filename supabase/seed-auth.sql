@@ -1,4 +1,4 @@
--- INDRA platform demo auth seed (Module 01)
+-- INDRA platform demo auth seed (Module 01, extended by Module 02 identities)
 -- Run AFTER supabase/seed.sql:
 --   psql "$DATABASE_URL" -f supabase/seed-auth.sql
 -- or add it to the Supabase seed workflow.
@@ -24,6 +24,9 @@ with accounts(id, email, full_name, employee_code) as (
     ('22222222-2222-2222-2222-222222222803'::uuid, 'arjun.mehta@indra.example', 'Arjun Mehta', 'IND-0003'),
     ('22222222-2222-2222-2222-222222222804'::uuid, 'priya.nair@indra.example', 'Priya Nair', 'IND-0004'),
     ('22222222-2222-2222-2222-222222222805'::uuid, 'vikram.singh@indra.example', 'Vikram Singh', 'IND-0005'),
+    ('22222222-2222-2222-2222-222222222818'::uuid, 'karthik.subramanian@indra.example', 'Karthik Subramanian', 'IND-0008'),
+    ('22222222-2222-2222-2222-222222222819'::uuid, 'divya.sharma@indra.example', 'Divya Sharma', 'IND-0009'),
+    ('22222222-2222-2222-2222-222222222820'::uuid, 'rahul.verma@indra.example', 'Rahul Verma', 'IND-0010'),
     ('22222222-2222-2222-2222-222222222815'::uuid, 'customer@partner.example', 'Elena Fischer', 'IND-C001')
 )
 insert into auth.users (
@@ -61,6 +64,9 @@ with accounts(id, email) as (
     ('22222222-2222-2222-2222-222222222803'::uuid, 'arjun.mehta@indra.example'),
     ('22222222-2222-2222-2222-222222222804'::uuid, 'priya.nair@indra.example'),
     ('22222222-2222-2222-2222-222222222805'::uuid, 'vikram.singh@indra.example'),
+    ('22222222-2222-2222-2222-222222222818'::uuid, 'karthik.subramanian@indra.example'),
+    ('22222222-2222-2222-2222-222222222819'::uuid, 'divya.sharma@indra.example'),
+    ('22222222-2222-2222-2222-222222222820'::uuid, 'rahul.verma@indra.example'),
     ('22222222-2222-2222-2222-222222222815'::uuid, 'customer@partner.example')
 )
 insert into auth.identities (
@@ -92,6 +98,9 @@ from (
     ('22222222-2222-2222-2222-222222222803'::uuid, 'IND-0003'),
     ('22222222-2222-2222-2222-222222222804'::uuid, 'IND-0004'),
     ('22222222-2222-2222-2222-222222222805'::uuid, 'IND-0005'),
+    ('22222222-2222-2222-2222-222222222818'::uuid, 'IND-0008'),
+    ('22222222-2222-2222-2222-222222222819'::uuid, 'IND-0009'),
+    ('22222222-2222-2222-2222-222222222820'::uuid, 'IND-0010'),
     ('22222222-2222-2222-2222-222222222815'::uuid, 'IND-C001')
 ) as accounts(id, employee_code)
 where e.employee_code = accounts.employee_code
@@ -111,6 +120,9 @@ from (
     ('22222222-2222-2222-2222-222222222803'::uuid, 'Arjun Mehta', 'arjun.mehta@indra.example'),
     ('22222222-2222-2222-2222-222222222804'::uuid, 'Priya Nair', 'priya.nair@indra.example'),
     ('22222222-2222-2222-2222-222222222805'::uuid, 'Vikram Singh', 'vikram.singh@indra.example'),
+    ('22222222-2222-2222-2222-222222222818'::uuid, 'Karthik Subramanian', 'karthik.subramanian@indra.example'),
+    ('22222222-2222-2222-2222-222222222819'::uuid, 'Divya Sharma', 'divya.sharma@indra.example'),
+    ('22222222-2222-2222-2222-222222222820'::uuid, 'Rahul Verma', 'rahul.verma@indra.example'),
     ('22222222-2222-2222-2222-222222222815'::uuid, 'Elena Fischer', 'customer@partner.example')
 ) as accounts(id, full_name, email)
 on conflict (id) do update set

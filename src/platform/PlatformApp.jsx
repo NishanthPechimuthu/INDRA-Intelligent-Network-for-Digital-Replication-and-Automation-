@@ -36,6 +36,19 @@ import OrganizationPage from './pages/OrganizationPage.jsx';
 import EmployeesPage from './pages/EmployeesPage.jsx';
 import RolesPage from './pages/RolesPage.jsx';
 import ShiftsPage from './pages/ShiftsPage.jsx';
+import OperatorDashboardPage from './pages/OperatorDashboardPage.jsx';
+import SupervisorDashboardPage from './pages/SupervisorDashboardPage.jsx';
+import ProgrammerDashboardPage from './pages/ProgrammerDashboardPage.jsx';
+import EmployeeDirectoryPage from './pages/EmployeeDirectoryPage.jsx';
+import ShiftSchedulePage from './pages/ShiftSchedulePage.jsx';
+import AttendanceRegisterPage from './pages/AttendanceRegisterPage.jsx';
+import TaskBoardPage from './pages/TaskBoardPage.jsx';
+import ProductionOrderBoardPage from './pages/ProductionOrderBoardPage.jsx';
+import ProductionReportPage from './pages/ProductionReportPage.jsx';
+import IssueReportingPage from './pages/IssueReportingPage.jsx';
+import ReassignmentPage from './pages/ReassignmentPage.jsx';
+import ShiftHandoverPage from './pages/ShiftHandoverPage.jsx';
+import WorkHistoryPage from './pages/WorkHistoryPage.jsx';
 
 const PUBLIC_PAGES = {
   '/login': LoginPage,
@@ -62,6 +75,20 @@ const PROTECTED_PAGES = {
   '/admin/employees': EmployeesPage,
   '/admin/roles': RolesPage,
   '/admin/shifts': ShiftsPage,
+  // Module 02 · workforce and production operations
+  '/operator': OperatorDashboardPage,
+  '/supervisor': SupervisorDashboardPage,
+  '/programmer': ProgrammerDashboardPage,
+  '/workforce/employees': EmployeeDirectoryPage,
+  '/workforce/schedule': ShiftSchedulePage,
+  '/workforce/attendance': AttendanceRegisterPage,
+  '/production/tasks': TaskBoardPage,
+  '/production/orders': ProductionOrderBoardPage,
+  '/production/reports': ProductionReportPage,
+  '/operations/issues': IssueReportingPage,
+  '/operations/reassignment': ReassignmentPage,
+  '/operations/handover': ShiftHandoverPage,
+  '/work-history': WorkHistoryPage,
 };
 
 /**
@@ -84,6 +111,19 @@ export const ROUTE_PERMISSIONS = {
   '/admin/employees': 'employees.read',
   '/admin/roles': 'roles.read',
   '/admin/shifts': 'shifts.read',
+  '/operator': 'tasks.read.self',
+  '/supervisor': 'workforce.team.read',
+  '/programmer': 'programs.read',
+  '/workforce/employees': 'employees.read',
+  '/workforce/schedule': 'shifts.read',
+  '/workforce/attendance': 'attendance.read.self',
+  '/production/tasks': 'tasks.read.self',
+  '/production/orders': 'production.orders.read',
+  '/production/reports': 'production.reports.create',
+  '/operations/issues': 'production.issues.create',
+  '/operations/reassignment': 'reassignment.create',
+  '/operations/handover': 'handover.submit',
+  '/work-history': 'tasks.read.self',
 };
 
 function usePathname() {

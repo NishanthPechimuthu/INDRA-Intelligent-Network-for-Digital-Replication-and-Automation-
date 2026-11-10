@@ -126,3 +126,52 @@ For the database layer, either use the Supabase CLI (`supabase db reset` then
 It applies every migration and both seed files to a throwaway PostgreSQL container, then asserts
 the read isolation, write denials and approval workflow summarized in sections 2 and 3. It
 exits non-zero on the first failure and removes the container afterwards.
+
+
+## 7. Module 02 · workforce and production operations
+
+### Connected environment
+
+The hosted Supabase project referenced by `.env` was empty, so Modules 01 and 02 were applied to it in
+order: 11 migrations, `seed.sql`, `seed-auth.sql` and `seed-module2.sql`. `VITE_SUPABASE_URL` held a
+PostgreSQL connection string, which the browser cannot use; it was corrected to the project's HTTPS
+API URL and the connection strings were moved to server-side `SUPABASE_DB_URL` /
+`SUPABASE_POOLER_URL` entries. `.env` remains gitignored.
+
+The project's direct database host is IPv6-only from this network, so migrations were applied through
+the `ap-south-1` connection pooler with the `postgres.<project-ref>` role.
+
+### Verified against the live database
+
+Sign-in, PostgREST and RLS were exercised with real demo tokens, and the write paths with
+`set local role authenticated` plus a JWT claim inside transactions that were rolled back:
+
+| Check | Result |
+| --- | --- |
+| Password sign-in (`admin@indra.example`) | HTTP 200, session issued |
+| `get_my_context()` | roles and permissions returned |
+| Admin employee visibility | 15 rows |
+| Operator production tasks / orders / reports | 4 / 3 / 3 (own scope) |
+| Operator assigns their own task to another employee | rejected: "Task assignment can only be changed by a supervisor" |
+| Unbalanced production entry (50 = 40 + 5) | rejected with an explanatory message |
+| Valid entry with material consumption | accepted, task and order totals refreshed |
+| Supervisor: safety incidents / clinical detail | 1 / 0 |
+| HR: clinical detail | 1 |
+| Overwrite of an approved program version | rejected: "immutable; register a new version instead" |
+| HOD approving an in-review version by another author | previous version superseded, `current_version` advanced |
+| HOD approving the pending reassignment | task reassigned, blocked task cancelled, status `applied` |
+
+### Local checks
+
+`npm test` 78/78, `npx eslint .` 0 errors / 15 pre-existing warnings, `npx tsc --noEmit` clean,
+`npm run build` succeeds. The 3D studio at `/` is untouched.
+
+### Deliberate design decisions
+
+- Production tasks extend the Module 01 `tasks` table rather than introducing a parallel task store.
+- Every approval-bearing workflow (material, reassignment, repair, equipment, manpower, program
+  modification) writes a row in the shared `requests` / `approvals` tables.
+- Clinical safety detail is a separate table so a supervisor can be granted operational visibility
+  without ever receiving medical data; this is enforced by policy, not by the UI.
+- Machine program payloads live in a private bucket and are served through short-lived signed URLs
+  recorded in the audit log.

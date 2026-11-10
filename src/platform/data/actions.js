@@ -320,3 +320,166 @@ export async function uploadDocument({ file, entityType, entityId, category, org
   const signed = await supabase.storage.from('employee-documents').createSignedUrl(path, 3600);
   return { data: { ...insert.data, url: signed.data?.signedUrl || null } };
 }
+
+// ---------------------------------------------------------------------------
+// Module 02 · workforce and production operations
+// ---------------------------------------------------------------------------
+export function transitionTask(taskId, action, reason) {
+  if (!isSupabaseConfigured) {
+    return guarded(() => demo.transitionProductionTask(taskId, action, reason, demo.getDemoSession()?.employeeId));
+  }
+  const rpc = {
+    accepted: 'production_task_transition',
+    pause: 'pause_production_task',
+    resume: 'resume_production_task',
+    start: 'start_production_task',
+    complete: 'complete_production_task',
+    blocked: 'production_task_transition',
+    cancelled: 'production_task_transition',
+  }[action];
+  if (!rpc) return { error: { code: 'unsupported_action', message: `Unknown task action ${action}.` } };
+  return guarded(async () => {
+    if (action === 'accepted' || action === 'blocked' || action === 'cancelled') {
+      return supabase.rpc('production_task_transition', { p_task_id: taskId, p_status: action, p_reason: reason || null });
+    }
+    return supabase.rpc(rpc, action === 'pause' ? { p_task_id: taskId, p_reason: reason || null } : { p_task_id: taskId });
+  });
+}
+
+export function submitProductionReport(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.recordProductionReport(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('record_production_report', { p_payload: payload }));
+}
+
+export function submitTechnicalIssue(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.createTechnicalIssue(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('report_technical_issue', { p_payload: payload }));
+}
+
+export function submitToolDamage(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.createToolDamage(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('report_tool_damage', { p_payload: payload }));
+}
+
+export function submitMaterialRequest(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.createMaterialRequest(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('request_material', { p_payload: payload }));
+}
+
+export function submitReassignment(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.createReassignment(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('request_reassignment', { p_payload: payload }));
+}
+
+export function submitShiftHandover(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.submitShiftReport(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('submit_shift_report', { p_payload: payload }));
+}
+
+export function acknowledgeHandover(reportId) {
+  if (!isSupabaseConfigured) return guarded(() => demo.acknowledgeShiftReport(reportId, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('acknowledge_shift_report', { p_report_id: reportId }));
+}
+
+export function registerProgramVersion(payload) {
+  if (!isSupabaseConfigured) return guarded(() => demo.registerProgramVersion(payload, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.rpc('register_program_version', { p_payload: payload }));
+}
+
+export function decideProgramVersion(versionId, decision, notes) {
+  if (!isSupabaseConfigured) {
+    return guarded(() => demo.decideProgramVersion(versionId, decision, notes, demo.getDemoSession()?.employeeId));
+  }
+  return guarded(async () => supabase.rpc('decide_program_version', { p_version_id: versionId, p_decision: decision, p_notes: notes || null }));
+}
+
+export function setIssueStatus(issueId, status) {
+  if (!isSupabaseConfigured) return guarded(() => demo.updateIssueStatus(issueId, status, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.from('technical_issues').update({ status }).eq('id', issueId).select().single());
+}
+
+/**
+ * Machine program payload upload. Files are private: the signed URL is created
+ * on demand and every access is written to the audit trail by the
+ * log_program_access RPC.
+ */
+export async function uploadProgramFile({ file, organizationId, machineId, programId }) {
+  if (!isSupabaseConfigured) {
+    return { error: { code: 'demo_storage', message: 'Program uploads require Supabase storage. Demo mode records the revision metadata only.' } };
+  }
+  const extension = file.name.split('.').pop() || 'bin';
+  const path = `${organizationId}/${machineId}/${programId}/${crypto.randomUUID()}.${extension}`;
+  const upload = await supabase.storage.from('machine-programs').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
+  if (upload.error) return failure(upload.error);
+  return { data: { storagePath: path, fileName: file.name, sizeBytes: file.size, mimeType: file.type } };
+}
+
+export async function programDownloadUrl(versionId, storagePath) {
+  if (!isSupabaseConfigured) {
+    return { error: { code: 'demo_storage', message: 'Signed program downloads require Supabase storage.' } };
+  }
+  await supabase.rpc('log_program_access', { p_version_id: versionId, p_action: 'program.download' });
+  const signed = await supabase.storage.from('machine-programs').createSignedUrl(storagePath, 300);
+  if (signed.error) return failure(signed.error);
+  return { data: { url: signed.data.signedUrl } };
+}
+
+export async function uploadEvidence({ file, organizationId, employeeId }) {
+  if (!isSupabaseConfigured) {
+    return { error: { code: 'demo_storage', message: 'Evidence uploads require Supabase storage. Demo mode keeps the report text only.' } };
+  }
+  const extension = file.name.split('.').pop() || 'bin';
+  const path = `${organizationId}/${employeeId}/${crypto.randomUUID()}.${extension}`;
+  const upload = await supabase.storage.from('incident-evidence').upload(path, file, { upsert: false, contentType: file.type });
+  if (upload.error) return failure(upload.error);
+  const insert = await supabase.from('documents').insert({
+    bucket: 'incident-evidence',
+    storage_path: path,
+    file_name: file.name,
+    mime_type: file.type,
+    size_bytes: file.size,
+    category: 'evidence',
+    entity_type: 'safety_incident',
+    owner_employee_id: employeeId,
+  }).select().single();
+  if (insert.error) return failure(insert.error);
+  return { data: { ...insert.data, storagePath: path } };
+}
+
+/** Supervisor task creation. Assignment fields are writable only with tasks.manage. */
+export function createProductionTask(payload) {
+  if (!isSupabaseConfigured) {
+    return guarded(() => demo.createProductionTask(payload, demo.getDemoSession()?.employeeId));
+  }
+  return guarded(async () => {
+    const { data, error } = await supabase.from('tasks').insert({
+      organization_id: payload.organizationId,
+      assignee_employee_id: payload.assigneeEmployeeId,
+      created_by_employee_id: payload.createdByEmployeeId,
+      supervisor_employee_id: payload.supervisorEmployeeId,
+      project_id: payload.projectId || null,
+      production_order_id: payload.productionOrderId,
+      workstation_id: payload.workstationId || null,
+      machine_id: payload.machineId || null,
+      title: payload.title,
+      description: payload.description || null,
+      work_instructions: payload.workInstructions || null,
+      status: 'todo',
+      priority: payload.priority || 'medium',
+      due_at: payload.dueAt || null,
+      planned_start_at: payload.plannedStartAt || null,
+      planned_end_at: payload.plannedEndAt || null,
+      target_quantity: Number(payload.targetQuantity) || null,
+      production_status: 'assigned',
+      required_skill_id: payload.requiredSkillId || null,
+      required_certification_id: payload.requiredCertificationId || null,
+    }).select().single();
+    if (error) return { error };
+    return { data };
+  });
+}
+
+export function updateTaskPriority(taskId, priority) {
+  if (!isSupabaseConfigured) return guarded(() => demo.updateTaskPriority(taskId, priority, demo.getDemoSession()?.employeeId));
+  return guarded(async () => supabase.from('tasks').update({ priority }).eq('id', taskId).select().single());
+}
