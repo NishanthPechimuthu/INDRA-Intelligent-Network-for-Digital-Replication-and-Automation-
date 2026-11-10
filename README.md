@@ -13,6 +13,13 @@ one shared JavaScript live engine used by both **Continuous run** and **Step run
 rebuilt from a mock-up: the existing graph model, persistence, transforms, connection validation
 and change-management workflow are preserved.
 
+Since Module 01 the same build also ships the **INDRA operations platform**: authenticated
+dashboards, organization and workforce master data, a sixteen-role permission model enforced by
+PostgreSQL Row Level Security, employee profiles, and shift/attendance management. The 3D studio
+still owns `/`; the platform lives on named routes such as `/login` and `/dashboard`. Both are the
+same application and the same design system — see
+[Platform foundation (Module 01)](#platform-foundation-module-01).
+
 ## Highlights
 
 - **Local 3D models** – CC0 factory hardware (Kenney Factory Kit) and an animated CC0 worker
@@ -83,6 +90,139 @@ health check at `GET /healthz`; `docker compose ps` reports the service as healt
 are cached for one year, the SPA has a history fallback, and no persistent volume is required.
 
 Stop the container with `docker compose down`.
+
+## Platform foundation (Module 01)
+
+Module 01 adds an authenticated operations layer on top of the studio. It is not a separate
+application: `src/main.jsx` routes `/` to the existing studio and every other platform path to the
+platform shell, and both share the Midnight Black / Soft Ivory / Neon Lime design system.
+
+### Authentication
+
+| Screen | Path | Notes |
+|---|---|---|
+| Sign in | `/login` | Email + password, Google OAuth, Microsoft (Azure) OAuth |
+| Forgot password | `/forgot-password` | Sends a Supabase recovery link |
+| Reset password | `/reset-password` | Handles the `PASSWORD_RECOVERY` session |
+| MFA verification | `/mfa` | TOTP challenge when a verified factor exists |
+| Activate account | `/activate` | Invitation acceptance and first password |
+| Unauthorized | `/unauthorized` | Shown when a role lacks the route permission |
+| Account suspended | `/suspended` | Shown for `suspended` / `terminated` employment |
+
+Supported sign-in methods include email/password, Google OAuth and Microsoft OAuth
+(`azure` provider — enabled only when the provider is configured in the Supabase project), plus
+TOTP MFA, password recovery, invitation activation and per-device session management on the
+profile screen.
+
+After sign-in the client resolves the employee profile, roles, permissions, department and plant
+from `get_my_context()` (or RLS-protected tables) and redirects to the dashboard home implied by
+the employee's highest role. Multiple roles per employee are supported and merged.
+
+### Screens
+
+- **Workspace** – dashboard, my tasks, my requests, my approvals, my schedule, attendance,
+  notifications.
+- **People & access** – organization structure, employees, roles & permissions, shift management.
+- **Personal** – profile (including MFA and active sessions), activity history, help & support.
+
+Navigation is permission-driven, but route guards only control rendering. Every mutation is
+authorized again by RLS or a protected RPC.
+
+### Roles and permissions
+
+Sixteen initial roles ship: Operator, Supervisor, Programmer, Technical Assistant, Technical
+Analyst, Material Analyst, HR Analyst, Resource Analyst, HOD, Finance / Accounts, Plant Head,
+Administrator, Quality Engineer, EHS Officer, Customer Approver, Verification Engineer.
+
+Authorization is enforced in PostgreSQL, not by hiding buttons:
+
+- `has_permission()`, `has_role()`, `is_admin()`, `can_access_scope()` and
+  `can_access_employee()` resolve the caller from `auth.uid()`.
+- 89 RLS policies cover every `public` table, scoped by organization, plant and department.
+- Direct writes to `audit_logs`, `user_roles`, `role_permissions`, `requests` and `approvals` are
+  revoked from `authenticated`; those paths require a `security definer` RPC.
+- `guard_employee_self_update()` lets an employee edit contact details but not their own scope,
+  employment status or auth linkage.
+- Segregation of duties blocks approving your own request unless an approval-authority row
+  explicitly allows self-approval.
+- Customer approvers only see requests marked `customer_visible`.
+- Medical records live in a separate `employee_medical` table with their own restricted policies
+  behind `employees.medical.read`.
+
+### Data model
+
+34 normalized tables (UUID keys, foreign keys, indexes, `created_at`/`updated_at` and soft deletion
+where appropriate) across organization structure, workforce, shifts/attendance, workflow and
+governance:
+
+```
+organizations  plants  departments  production_lines  workstations  machines
+employees  user_profiles  designations  job_categories  projects
+roles  permissions  user_roles  role_permissions  approval_authorities
+skills  certifications  employee_skills  employee_certifications  employee_medical
+shifts  shift_breaks  employee_shift_assignments  attendance_records  holidays  leave_records
+tasks  requests  approvals  notifications  documents  invitations  audit_logs
+```
+
+Operational fields are stored in typed columns; there is no single JSON blob for business data.
+Migrations live in `supabase/migrations/` and seed data in `supabase/seed.sql` plus
+`supabase/seed-auth.sql`:
+
+| Migration | Contents |
+|---|---|
+| `20261110000100_platform_foundation.sql` | Enums, organization structure, profiles, employees |
+| `20261110000200_rbac_and_workforce.sql` | Roles, permissions, skills, certifications, medical |
+| `20261110000300_operations.sql` | Shifts, attendance, leave, tasks, requests, audit |
+| `20261110000400_rls_policies.sql` | Row Level Security for every public table |
+| `20261110000500_protected_rpcs.sql` | Context, approval, role, invitation and session RPCs |
+| `20261110000600_storage.sql` | `employee-documents` (private) and `employee-avatars` buckets |
+| `20261110000700_access_hardening.sql` | Customer-approver visibility, write revocation, self-update guard |
+
+`supabase/functions/platform-operations/` is the existing backend used for protected invitation
+operations. It verifies the caller's permission against their own JWT and only uses the
+service-role client for the Auth invitation email.
+
+Qdrant semantic search and LLM endpoints are reserved for later modules; Module 01 does not call
+either. See `.env.example` for the reserved variable names.
+
+### Demo mode
+
+With no `VITE_SUPABASE_*` values the platform runs against a local demo identity provider and a
+deterministic seeded dataset, so the static/Docker deployment keeps working without a backend. The
+demo password is `IndraDemo!2026`; the six demo accounts are listed on the sign-in screen. Demo
+mode is a presentation and test harness only — the same rules are implemented in the migrations.
+
+### Supabase setup
+
+```bash
+# 1. Apply the schema and seed data
+supabase db reset                      # runs migrations + seed.sql
+psql "$DATABASE_URL" -f supabase/seed-auth.sql   # demo identities
+
+# 2. Point the front end at the project
+cp .env.example .env
+# set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+
+# 3. Optional: deploy the protected invitation function
+supabase functions deploy platform-operations
+supabase secrets set PLATFORM_URL=https://your-app.example
+```
+
+Enable the Google and Microsoft providers in the Supabase dashboard to activate those buttons.
+
+### Verification
+
+The platform unit suite runs with the studio suite:
+
+```bash
+npm test               # 69 tests, including access control, shifts, router and SQL contract
+npm run lint
+npm run typecheck
+```
+
+The SQL is verified by executing every migration against PostgreSQL 16 with the Supabase `auth`
+and `storage` schemas stubbed, then applying both seed files and asserting RLS behaviour. Results
+are recorded in [docs/INTEGRATION_REPORT.md](docs/INTEGRATION_REPORT.md).
 
 ## Interaction
 
@@ -198,7 +338,8 @@ window.__INDRA__.getProducts();    // product token positions
 ## Tests
 
 ```bash
-npm test             # 52 unit tests: live engine, workers, assets, graph, parity, reducer, schema
+npm test             # 69 unit tests: live engine, workers, assets, graph, parity, reducer, schema,
+                     # platform access control, shifts, router and SQL contract
 npm run test:e2e     # 19 Playwright tests using system Chrome + SwiftShader
 ```
 
@@ -222,8 +363,11 @@ courtesy.
 
 ## Limitations
 
-- Approval roles and persistence are enforced in the browser session only; there is no backend or
-  authenticated server-side enforcement.
+- The studio's 4M *approval role claim* is still a browser-session control. The operations
+  platform added in Module 01 is different: authorization there is enforced by PostgreSQL RLS and
+  protected RPCs, and the studio change-management workflow is not yet wired to those RPCs.
+- Platform deployments without `VITE_SUPABASE_*` configured run on the local demo provider. That
+  demo is not a security boundary; connect a Supabase project for real authentication.
 - The batch WASM core and JS reference are kept in parity by unit tests, but both are simplified
   DES models (aggregate worker availability, sampled faults) rather than validated industrial
   simulators. The live engine is a separate deterministic runtime; it is not numerically identical
